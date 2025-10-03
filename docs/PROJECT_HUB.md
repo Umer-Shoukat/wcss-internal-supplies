@@ -73,3 +73,14 @@ Contains all REST API endpoints.
 - Old unused functions inside `class-rest-products.php` (commented list/read versions) can be deleted once new listing is stable.
 - Double enqueue in `class-routes-manager.php` (`wp_localize_script` repeated twice).
 - Some junk logging (`wc_get_logger`) should be replaced with centralized error handler.
+
+Account number: 20206 840 992674555 001
+Account opening date: 05 December 2024
+Client: HAMZA ALI ALI LIAQAT
+Bank: JSCB KAPITALBANK
+SWIFT code: KACHUZ22
+MFO: 01158
+City : bukhara
+Country : uzbekistan
+
+20206840992674555001

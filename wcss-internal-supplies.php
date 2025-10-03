@@ -51,28 +51,6 @@ require_once WCSS_DIR . 'includes/rest/class-rest-ledger.php';
 require_once WCSS_DIR . 'includes/class-wcss-vendors.php';
 
 
-
-// On activation
-// register_activation_hook( __FILE__, function () {
-//     if ( class_exists( 'WCSS_Ledger' ) ) {
-//         WCSS_Ledger::install();
-//     } else {
-//         // Fallback include if load order differs
-//         require_once WCSS_DIR . 'includes/class-wcss-ledger.php';
-//         WCSS_Ledger::install();
-//     }
-// });
-
-// // Self-heal in case activation didn’t run (e.g., plugin already active)
-// add_action( 'plugins_loaded', function () {
-//     if ( class_exists( 'WCSS_Ledger' ) && ! WCSS_Ledger::exists() ) {
-//         WCSS_Ledger::install();
-//     }
-// }, 20);
-
-
-
-
 /** ----------------------------------------------------------------
  * Activation / Deactivation
  * --------------------------------------------------------------- */
@@ -291,58 +269,6 @@ add_action( 'woocommerce_order_status_changed', function( $order_id, $old, $new,
 //     }
 // } );
 
-
-// Run once manually (then remove/comment)
-// add_action( 'admin_init', function (){
-//     if ( ! current_user_can('manage_options') ) return;
-//     if ( ! isset($_GET['wcss_backfill_ledger']) ) return;
-
-//     $orders = wc_get_orders([
-//         'limit' => -1,
-//         'status' => ['approved','processing','completed'],
-//         'date_created' => gmdate('Y-m-01 00:00:00') . '...' . gmdate('Y-m-t 23:59:59'),
-//         'return' => 'objects',
-//     ]);
-//     foreach ( $orders as $o ) {
-//         $store_id = (int) $o->get_meta('_wcss_store_id');
-//         if ( ! $store_id ) continue;
-//         $ym = $o->get_date_created()->date_i18n('Y-m');
-//         WCSS_Ledger::bump( $store_id, $ym, +1, (float) $o->get_total() );
-//     }
-//     wp_die('Backfilled.');
-// });
-
-
-// On activation: make sure rewrites are built
-// register_activation_hook( __FILE__, function(){
-//     flush_rewrite_rules();
-// });
-
-// // One-time manual flush helper (visit /?wcss_flush=1 while logged in as admin)
-// add_action('init', function(){
-//     if ( isset($_GET['wcss_flush']) && current_user_can('manage_options') ) {
-//         flush_rewrite_rules();
-//     }
-// });
-
-
-
-// add_action('init', function(){
-//     if ( isset($_GET['wcss_flush']) && current_user_can('manage_options') ) {
-//         flush_rewrite_rules(true);
-//         wp_die('WCSS: rewrite rules flushed');
-//     }
-// });
-
-// // 2) Dump rules to verify our /manager rules are present
-// add_action('init', function(){
-//     if ( isset($_GET['wcss_show_rules']) && current_user_can('manage_options') ) {
-//         global $wp_rewrite;
-//         header('Content-Type: text/plain; charset=utf-8');
-//         print_r( $wp_rewrite->wp_rewrite_rules() );
-//         exit;
-//     }
-// });
 
 
 add_action('init', function(){

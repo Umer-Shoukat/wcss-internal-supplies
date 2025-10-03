@@ -94,61 +94,6 @@ class WCSS_Route_Manager {
 
     }
 
-    // public function maybe_render() {
-    //     $view   = get_query_var( 'wcssm' );
-    //     $action = get_query_var( 'wcssm_action' );
-    //     $id     = absint( get_query_var( 'wcssm_id' ) );
-
-    //     if ( ! $view ) return;
-
-    //     // Only Shop Managers (custom cap) or Admins
-    //     if ( ! is_user_logged_in() || ( ! current_user_can( 'wcss_manage_portal' ) && ! current_user_can( 'manage_options' ) ) ) {
-    //         auth_redirect();
-    //         exit;
-    //     }
-
-    //     status_header( 200 );
-    //     nocache_headers();
-    //     show_admin_bar( false );
-
-    //     $base = WCSS_DIR . 'frontend/pages/';
-    //     $file = $this->resolve_view( $base, $view, $action );
-
-    //     if ( $file && file_exists( $file ) ) {
-    //         include $file;
-    //         exit;
-    //     }
-
-    //     // Fallback to legacy shell if present
-    //     $legacy = WCSS_DIR . 'frontend/views/manager-shell.php';
-    //     if ( file_exists( $legacy ) ) {
-    //         include $legacy;
-    //         exit;
-    //     }
-
-    //     echo '<h1>Manager</h1><p>Page not found.</p>';
-    //     exit;
-    // }
-
-    // public function maybe_render() {
-    //     $view   = get_query_var('wcss');
-    //     $action = get_query_var('wcss_action');
-    //     $id     = absint( get_query_var('wcss_id') );
-    //     if ( ! $view ) return;
-    
-    //     // auth
-    //     if ( ! is_user_logged_in() || ( ! current_user_can('wcss_manage_portal') && ! current_user_can('manage_options') ) ) {
-    //         auth_redirect(); exit;
-    //     }
-    
-    //     status_header(200); nocache_headers(); show_admin_bar(false);
-    
-    //     $base = WCSS_DIR . 'frontend/pages/';
-    //     $file = $this->resolve_view( $base, $view, $action );
-    //     if ( $file && file_exists($file) ) { include $file; exit; }
-    
-    //     echo '<div class="wcssm-wrap"><h1>Manager</h1><p>Page not found.</p></div>'; exit;
-    // }
 
     public function maybe_render() {
         $view   = get_query_var('wcss');
@@ -201,25 +146,6 @@ class WCSS_Route_Manager {
         echo '<div class="wcssm-wrap"><h1>Manager</h1><p>Page not found.</p></div>';
         exit;
     }
-
-    
-    // private function resolve_view( string $base, string $view, string $action = '' ) : ?string {
-    //     // Specific action file: e.g., products-create.php
-    //     if ( $action ) {
-    //         $candidate = $base . sanitize_file_name( $view . '-' . $action ) . '.php';
-    //         if ( file_exists( $candidate ) ) return $candidate;
-    //     }
-    //     // Generic view: e.g., products.php, orders.php, stores.php
-    //     $candidate = $base . sanitize_file_name( $view ) . '.php';
-    //     if ( file_exists( $candidate ) ) return $candidate;
-
-    //     // Dashboard default
-    //     if ( $view === 'dashboard' ) {
-    //         $candidate = $base . 'dashboard.php';
-    //         if ( file_exists( $candidate ) ) return $candidate;
-    //     }
-    //     return null;
-    // }
 
 
     private function resolve_view( $base, $view, $action='' ) {
