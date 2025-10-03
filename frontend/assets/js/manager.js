@@ -1392,28 +1392,34 @@
         .join("");
 
       const pager = `
-      <div class="pager-bar">
-        <button class="btn pager-prev" ${
-          meta.page <= 1 ? "disabled" : ""
-        }>← Prev</button>
-        <span class="pager-info">Page ${meta.page} / ${meta.total_pages} · ${
-        meta.total
-      } items</span>
-        <button class="btn pager-next" ${
-          meta.page >= meta.total_pages ? "disabled" : ""
-        }>Next →</button>
-      </div>`;
+        <div class="pager-bar">
+          <button type="button" class="btn pager-prev" ${
+            state.page <= 1 ? "disabled" : ""
+          }>← Prev</button>
+          <span class="pager-info">Page ${state.page} / ${
+        state.total_pages
+      } · ${state.total} items</span>
+          <button type="button" class="btn pager-next" ${
+            state.page >= state.total_pages ? "disabled" : ""
+          }>Next →</button>
+        </div>`;
 
       $grid.html(`${head}${rows || "<p>No products.</p>"}${pager}`);
+      console.log($grid);
+      const preBtn = $grid.find(".pager-prev");
+      console.log(preBtn);
 
       // pager events
       $grid.find(".pager-prev").on("click", function () {
+        console.log("btn clicked ....  ");
         if (state.page > 1) {
           state.page--;
           load();
         }
       });
+
       $grid.find(".pager-next").on("click", function () {
+        console.log("btn clicked ....  ");
         if (state.page < meta.total_pages) {
           state.page++;
           load();
@@ -1436,6 +1442,29 @@
       });
     }
 
+    // function load() {
+    //   $grid.html("Loading…");
+    //   const qs = $.param({
+    //     page: state.page,
+    //     per_page: state.per_page,
+    //     search: state.search,
+    //   });
+    //   $.ajax({
+    //     url: WCSSM.rest + "products?" + qs,
+    //     headers: { "X-WP-Nonce": WCSSM.nonce },
+    //   })
+    //     .done(function (d) {
+    //       render(d.items || [], {
+    //         total: d.total || 0,
+    //         total_pages: d.total_pages || 1,
+    //         page: d.page || state.page,
+    //       });
+    //     })
+    //     .fail(function (x) {
+    //       $grid.html("Error: " + (x.responseJSON?.message || x.statusText));
+    //     });
+    // }
+
     function load() {
       $grid.html("Loading…");
       const qs = $.param({
@@ -1448,11 +1477,12 @@
         headers: { "X-WP-Nonce": WCSSM.nonce },
       })
         .done(function (d) {
-          render(d.items || [], {
-            total: d.total || 0,
-            total_pages: d.total_pages || 1,
-            page: d.page || state.page,
-          });
+          // update state with server meta
+          state.total = d.total || 0;
+          state.total_pages = d.total_pages || 1;
+          state.page = d.page || state.page;
+
+          render(d.items || [], state); // pass state if you like, but render uses state anyway
         })
         .fail(function (x) {
           $grid.html("Error: " + (x.responseJSON?.message || x.statusText));

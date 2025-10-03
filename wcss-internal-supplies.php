@@ -345,6 +345,10 @@ add_action( 'woocommerce_order_status_changed', function( $order_id, $old, $new,
 // });
 
 
+add_action('init', function(){
+    if ($r = get_role('shop_manager')) { $r->add_cap('wcss_manage_portal'); }
+}, 20);
+
 
 
 add_action('template_redirect', function(){

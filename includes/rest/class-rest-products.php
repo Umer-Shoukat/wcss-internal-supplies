@@ -161,7 +161,7 @@ class WCSS_REST_Products {
     // adding pagination to list product s
     public function list_products( WP_REST_Request $req ) {
         $page   = max( 1, (int) ($req->get_param('page') ?: 1) );
-        $per    = min( 100, max( 1, (int) ($req->get_param('per_page') ?: 2) ) );
+        $per    = min( 20, max( 100, (int) ($req->get_param('per_page') ?: 20) ) );
         $search = sanitize_text_field( (string) $req->get_param('search') );
     
         // Build a safe, boring WP_Query for products
@@ -176,7 +176,7 @@ class WCSS_REST_Products {
             'no_found_rows'  => false,            // we want totals for pagination
             'fields'         => 'ids',            // fetch only IDs; faster
         ];
-    
+        // return 'testing the fucntion';
         try {
             $q = new WP_Query( $q_args );
     
