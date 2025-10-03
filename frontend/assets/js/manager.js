@@ -173,18 +173,56 @@
       });
 
       // delete
-      $grid.find(".delete-product").on("click", function () {
+      // $grid.find(".delete-product").on("click", function () {
+      //   const id = parseInt($(this).data("id"), 10);
+      //   if (!confirm("Delete product #" + id + "?")) return;
+      //   $.ajax({
+      //     url: WCSSM.rest + "products/" + id,
+      //     method: "DELETE",
+      //     headers: { "X-WP-Nonce": WCSSM.nonce },
+      //   })
+      //     .done(load)
+      //     .fail((x) =>
+      //       alert("Error: " + (x.responseJSON?.message || x.statusText))
+      //     );
+      // });
+
+      // --- add near top of initProductsList() ---
+
+      function flash(msg, ok = true) {
+        const $f = $("#wcssm-flash");
+        $f.removeClass("is-ok is-err")
+          .addClass(ok ? "is-ok" : "is-err")
+          .text(msg)
+          .stop(true, true)
+          .fadeIn(120);
+        setTimeout(() => $f.fadeOut(180), 2500);
+      }
+
+      // --- replace your existing delete handler with this ---
+      $grid.on("click", ".delete-product", function () {
         const id = parseInt($(this).data("id"), 10);
+        if (!Number.isInteger(id)) return;
+
         if (!confirm("Delete product #" + id + "?")) return;
+
         $.ajax({
           url: WCSSM.rest + "products/" + id,
           method: "DELETE",
           headers: { "X-WP-Nonce": WCSSM.nonce },
+          dataType: "json", // ensure .done() path on 200 JSON
         })
-          .done(load)
-          .fail((x) =>
-            alert("Error: " + (x.responseJSON?.message || x.statusText))
-          );
+          .done(function () {
+            flash("Product deleted.", true);
+            load(); // reload list
+          })
+          .fail(function (x) {
+            const msg =
+              x.responseJSON && x.responseJSON.message
+                ? x.responseJSON.message
+                : x.statusText || "Unknown error";
+            flash("Delete failed: " + msg, false);
+          });
       });
     }
 
@@ -306,92 +344,6 @@
   };
 
   /* Edit page */
-  // window.initProductEdit = function (id) {
-  //   $("#p-manage-stock").on("change", toggleStockInput);
-  //   attachMediaPicker();
-
-  //   $.when(
-  //     loadProductMeta(),
-  //     $.ajax({
-  //       url: WCSSM.rest + "products/" + id,
-  //       headers: { "X-WP-Nonce": WCSSM.nonce },
-  //     })
-  //   )
-  //     .done(function (m, r) {
-  //       const p = r[0];
-
-  //       // Prefill
-  //       $("#p-name").val(p.name || "");
-  //       $("#p-sku").val(p.sku || "");
-  //       $("#p-price").val(p.price || "");
-  //       $("#p-short").val(p.short_description || "");
-  //       $("#p-brand").val(p.brand || "");
-  //       // $("#p-vendor").val(p.vendor || "");
-  //       const vids = Array.isArray(p.vendor_ids) ? p.vendor_ids : [];
-  //       $("#p-vendors option").each(function () {
-  //         const v = parseInt($(this).val(), 10);
-  //         $(this).prop("selected", vids.includes(v));
-  //       });
-
-  //       // Categories
-  //       const ids = p.category_ids || [];
-  //       $("#p-categories option").each(function () {
-  //         const v = parseInt($(this).val(), 10);
-  //         $(this).prop("selected", ids.includes(v));
-  //       });
-
-  //       // Images (store IDs; we won’t back-fill previews unless you add an attachment lookup)
-  //       if (Array.isArray(p.images) && p.images.length) {
-  //         $("#p-images-ids").val(p.images.join(","));
-  //       }
-
-  //       // Inventory
-  //       $("#p-manage-stock").prop("checked", !!p.manage_stock);
-  //       $("#p-stock").val(p.stock || 0);
-  //       $("#p-stock-status").val(p.stock_status || "instock");
-  //       toggleStockInput();
-
-  //       // Status
-  //       $("#p-status").val(p.status || "publish");
-
-  //       // Save
-  //       let busy = false;
-  //       $("#p-update").on("click", function () {
-  //         if (busy) return;
-  //         busy = true;
-  //         const payload = collectPayload();
-  //         $("#p-msg").text("Saving…");
-  //         $.ajax({
-  //           url: WCSSM.rest + "products/" + id,
-  //           method: "PUT",
-  //           headers: {
-  //             "X-WP-Nonce": WCSSM.nonce,
-  //             "Content-Type": "application/json",
-  //           },
-  //           data: JSON.stringify(payload),
-  //         })
-  //           .done(function (pp) {
-  //             $("#p-msg").text("Saved #" + pp.id + " — " + pp.name);
-  //           })
-  //           .fail(function (x) {
-  //             $("#p-msg").text(
-  //               "Error: " + (x.responseJSON?.message || x.statusText)
-  //             );
-  //           })
-  //           .always(function () {
-  //             busy = false;
-  //           });
-  //       });
-  //     })
-  //     .fail(function (x) {
-  //       alert(
-  //         "Failed to load product: " + (x.responseJSON?.message || x.statusText)
-  //       );
-  //       window.location = WCSSM.home + "products";
-  //     });
-
-  //   bindNewVendorButton();
-  // };
 
   window.initProductEdit = function (id) {
     const $msg = $("#p-msg");
@@ -527,5 +479,296 @@
       });
 
     load();
+  };
+})(jQuery);
+
+/* store curd below */
+
+// -------------------------------------
+// STORES – List
+// -------------------------------------
+
+(function ($) {
+  window.initStoresList = function () {
+    const $grid = $("#wcssm-stores-grid");
+    const $search = $("#s-search"),
+      $refresh = $("#s-refresh");
+    let state = { page: 1, per_page: 20, total_pages: 1, total: 0, search: "" };
+
+    function escapeHtml(s) {
+      return (s || "").replace(
+        /[&<>"]/g,
+        (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])
+      );
+    }
+
+    function render(items) {
+      const head = `
+      <div class="row head">
+        <div>ID</div><div>Name</div><div>Code</div><div>City</div><div>State</div><div>Quota</div><div>Budget</div><div>Actions</div>
+      </div>`;
+      const rows = (items || [])
+        .map(
+          (s) => `
+      <div class="row">
+        <div>#${s.id}</div>
+        <div>${escapeHtml(s.name || "")}</div>
+        <div>${escapeHtml(s.code || "")}</div>
+        <div>${escapeHtml(s.city || "")}</div>
+        <div>${escapeHtml(s.state || "")}</div>
+        <div>${s.quota ?? 0}</div>
+        <div>${(s.budget ?? 0).toLocaleString()}</div>
+        <div>
+          <a class="btn btn-sm" href="${WCSSM.home}stores/edit/${s.id}">Edit</a>
+          <button class="btn btn-sm btn-danger st-del" data-id="${
+            s.id
+          }">Delete</button>
+        </div>
+      </div>`
+        )
+        .join("");
+
+      const pager = `
+      <div class="pager-bar">
+        <button type="button" class="btn pager-prev" ${
+          state.page <= 1 ? "disabled" : ""
+        }>← Prev</button>
+        <span class="pager-info">Page ${state.page} / ${state.total_pages} · ${
+        state.total
+      } items</span>
+        <button type="button" class="btn pager-next" ${
+          state.page >= state.total_pages ? "disabled" : ""
+        }>Next →</button>
+      </div>`;
+
+      $grid.html(head + rows + pager);
+    }
+
+    function load() {
+      console.log("here");
+      $grid.html("Loading…");
+      const qs = $.param({
+        page: state.page,
+        per_page: state.per_page,
+        search: state.search,
+      });
+      $.ajax({
+        url: WCSSM.rest + "stores?" + qs,
+        headers: { "X-WP-Nonce": WCSSM.nonce },
+      })
+        .done(function (d) {
+          state.total = d.total || 0;
+          state.total_pages = d.total_pages || 1;
+          render(d.items || []);
+        })
+        .fail(function (x) {
+          $grid.html("Error: " + (x.responseJSON?.message || x.statusText));
+        });
+    }
+
+    // delegated so it survives re-renders
+    $grid.on("click", ".pager-prev", function (e) {
+      e.preventDefault();
+      if (state.page > 1) {
+        state.page--;
+        load();
+      }
+    });
+    $grid.on("click", ".pager-next", function (e) {
+      e.preventDefault();
+      if (state.page < state.total_pages) {
+        state.page++;
+        load();
+      }
+    });
+
+    // $grid.on("click", ".st-del", function () {
+    //   const id = parseInt($(this).data("id"), 10);
+    //   if (!confirm("Delete store #" + id + "?")) return;
+    //   $.ajax({
+    //     url: WCSSM.rest + "stores/" + id,
+    //     method: "DELETE",
+    //     headers: { "X-WP-Nonce": WCSSM.nonce },
+    //   })
+    //     .done(load)
+    //     .fail((x) =>
+    //       alert("Error: " + (x.responseJSON?.message || x.statusText))
+    //     );
+    // });
+
+    // helper for inline messages
+    function flash(msg, ok = true) {
+      const $f = $("#wcssm-flash");
+      $f.removeClass("is-ok is-err")
+        .addClass(ok ? "is-ok" : "is-err")
+        .text(msg)
+        .stop(true, true)
+        .fadeIn(120);
+
+      // auto-hide after 2.5s
+      setTimeout(() => $f.fadeOut(180), 2500);
+    }
+
+    $grid.on("click", ".st-del", function () {
+      const id = parseInt($(this).data("id"), 10);
+      if (!Number.isInteger(id)) return;
+
+      if (!confirm("Delete store #" + id + "?")) return;
+
+      $.ajax({
+        url: WCSSM.rest + "stores/" + id,
+        method: "DELETE",
+        headers: { "X-WP-Nonce": WCSSM.nonce },
+        dataType: "json", // <- make jQuery treat it as JSON
+      })
+        .done(function () {
+          flash("Store deleted.", true);
+          load();
+        })
+        .fail(function (x) {
+          const msg =
+            x.responseJSON && x.responseJSON.message
+              ? x.responseJSON.message
+              : x.statusText || "Unknown error";
+          flash("Delete failed: " + msg, false);
+        });
+    });
+
+    if ($refresh.length)
+      $refresh.on("click", function () {
+        state.page = 1;
+        state.search = $search.val() || "";
+        load();
+      });
+    if ($search.length)
+      $search.on("keypress", function (e) {
+        if (e.which === 13) {
+          state.page = 1;
+          state.search = $search.val() || "";
+          load();
+        }
+      });
+
+    load();
+  };
+
+  // -------------------------------------
+  // STORES – Create
+  // -------------------------------------
+  window.initStoreCreate = function () {
+    const $msg = $("#s-msg");
+    function val(id) {
+      return $("#" + id).val();
+    }
+    function toast(t, ok = true) {
+      $msg
+        .removeClass("err ok")
+        .addClass(ok ? "ok" : "err")
+        .text(t)
+        .show();
+    }
+
+    $("#s-save")
+      .off("click")
+      .on("click", function () {
+        const payload = {
+          name: val("s-name"),
+          code: val("s-code"),
+          city: val("s-city"),
+          state: val("s-state"),
+          quota: val("s-quota"),
+          budget: val("s-budget"),
+        };
+        if (!payload.name) return toast("Name is required", false);
+
+        toast("Saving…");
+        $.ajax({
+          url: WCSSM.rest + "stores",
+          method: "POST",
+          headers: {
+            "X-WP-Nonce": WCSSM.nonce,
+            "Content-Type": "application/json",
+          },
+          data: JSON.stringify(payload),
+        })
+          .done(function () {
+            toast("Created! Redirecting…", true);
+            setTimeout(function () {
+              window.location = WCSSM.home + "stores";
+            }, 800);
+          })
+          .fail(function (x) {
+            toast("Error: " + (x.responseJSON?.message || x.statusText), false);
+          });
+      });
+  };
+
+  // -------------------------------------
+  // STORES – Edit
+  // -------------------------------------
+  window.initStoreEdit = function (id) {
+    const $msg = $("#s-msg");
+    function toast(t, ok = true) {
+      $msg
+        .removeClass("err ok")
+        .addClass(ok ? "ok" : "err")
+        .text(t)
+        .show();
+    }
+
+    function fill(s) {
+      $("#s-name").val(s.name || "");
+      $("#s-code").val(s.code || "");
+      $("#s-city").val(s.city || "");
+      $("#s-state").val(s.state || "");
+      $("#s-quota").val(s.quota ?? "");
+      $("#s-budget").val(s.budget ?? "");
+    }
+
+    $.ajax({
+      url: WCSSM.rest + "stores/" + id,
+      headers: { "X-WP-Nonce": WCSSM.nonce },
+    })
+      .done(fill)
+      .fail((x) =>
+        toast(
+          "Load failed: " + (x.responseJSON?.message || x.statusText),
+          false
+        )
+      );
+
+    $("#s-save")
+      .off("click")
+      .on("click", function () {
+        const body = {
+          name: $("#s-name").val(),
+          code: $("#s-code").val(),
+          city: $("#s-city").val(),
+          state: $("#s-state").val(),
+          quota: $("#s-quota").val(),
+          budget: $("#s-budget").val(),
+        };
+        if (!body.name) return toast("Name is required", false);
+
+        toast("Saving…");
+        $.ajax({
+          url: WCSSM.rest + "stores/" + id,
+          method: "PUT",
+          headers: {
+            "X-WP-Nonce": WCSSM.nonce,
+            "Content-Type": "application/json",
+          },
+          data: JSON.stringify(body),
+        })
+          .done(function () {
+            toast("Saved! Redirecting…", true);
+            setTimeout(function () {
+              window.location = WCSSM.home + "stores";
+            }, 800);
+          })
+          .fail(function (x) {
+            toast("Error: " + (x.responseJSON?.message || x.statusText), false);
+          });
+      });
   };
 })(jQuery);

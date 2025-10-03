@@ -18,7 +18,7 @@ class WCSS_Route_Manager {
      *  /manager/{view}/{action}/{id}  -> wcssm={view}&wcssm_action={action}&wcssm_id={id}
      */
 
-
+/*
      public function register_rewrite() {
         // Manager dashboard home → /manager
         add_rewrite_rule(
@@ -49,7 +49,46 @@ class WCSS_Route_Manager {
         );
     }
 
-    
+*/
+
+    public function register_rewrite() {
+        // Tell WP these query vars exist
+        add_rewrite_tag( '%wcss%',        '([a-z0-9_-]+)' );
+        add_rewrite_tag( '%wcss_action%', '([a-z0-9_-]+)' );
+        add_rewrite_tag( '%wcss_id%',     '([0-9]+)' );
+
+        // Allowed sections under /manager
+        $sections = '(products|stores|orders|reports|dashboard)';
+
+        // /manager  → dashboard
+        add_rewrite_rule(
+            '^manager/?$',
+            'index.php?wcss=dashboard',
+            'top'
+        );
+
+        // /manager/{section}
+        add_rewrite_rule(
+            '^manager/' . $sections . '/?$',
+            'index.php?wcss=$matches[1]',
+            'top'
+        );
+
+        // /manager/{section}/{action}   (e.g., create|edit|view|list)
+        add_rewrite_rule(
+            '^manager/' . $sections . '/([a-z0-9_-]+)/?$',
+            'index.php?wcss=$matches[1]&wcss_action=$matches[2]',
+            'top'
+        );
+
+        // /manager/{section}/{action}/{id}  (numeric id)
+        add_rewrite_rule(
+            '^manager/' . $sections . '/([a-z0-9_-]+)/([0-9]+)/?$',
+            'index.php?wcss=$matches[1]&wcss_action=$matches[2]&wcss_id=$matches[3]',
+            'top'
+        );
+    }
+
 
     public function add_qv( $vars ) {
         $vars[] = 'wcss'; $vars[] = 'wcss_action'; $vars[] = 'wcss_id'; return $vars;
@@ -110,9 +149,23 @@ class WCSS_Route_Manager {
         status_header(200);
         nocache_headers();
         show_admin_bar(false);
-    
+        
+        if ( $view === 'products' && in_array( $action, [ 'create', 'edit' ], true ) ) {
+            wp_enqueue_media();
+        }
+
         $base = WCSS_DIR . 'frontend/pages/';
         $file = $this->resolve_view( $base, $view, $action );
+
+        $inline = 'window.WCSSM = Object.assign(window.WCSSM||{}, ' . wp_json_encode( [
+            'view'   => $view,
+            'action' => $action,
+            'id'     => $id,
+            'home'   => home_url( '/manager/' ),
+        ] ) . ');';
+        wp_add_inline_script( 'wcss-manager', $inline, 'after' );
+
+
     
         if ( $file && file_exists($file) ) {
     
@@ -148,15 +201,32 @@ class WCSS_Route_Manager {
     }
 
 
-    private function resolve_view( $base, $view, $action='' ) {
-        if ( $action ) {
-            $f = $base . sanitize_file_name($view.'-'.$action).'.php';
-            if ( file_exists($f) ) return $f;
+    // private function resolve_view( $base, $view, $action='' ) {
+    //     if ( $action ) {
+    //         $f = $base . sanitize_file_name($view.'-'.$action).'.php';
+    //         if ( file_exists($f) ) return $f;
+    //     }
+    //     $f = $base . sanitize_file_name($view).'.php';
+    //     if ( file_exists($f) ) return $f;
+    //     if ( $view === 'dashboard' && file_exists($base.'dashboard.php') ) return $base.'dashboard.php';
+    //     return null;
+    // }
+
+    private function resolve_view( string $base, string $view, ?string $action ) {
+        switch ( $view ) {
+            case 'products':
+                if ( $action === 'create' ) return $base . 'products-create.php';
+                if ( $action === 'edit' )   return $base . 'products-edit.php';
+                return $base . 'products.php';
+    
+            case 'stores':
+                if ( $action === 'create' ) return $base . 'stores-create.php';
+                if ( $action === 'edit' )   return $base . 'stores-edit.php';
+                return $base . 'stores.php';
+    
+            default:
+                return $base . 'dashboard.php';
         }
-        $f = $base . sanitize_file_name($view).'.php';
-        if ( file_exists($f) ) return $f;
-        if ( $view === 'dashboard' && file_exists($base.'dashboard.php') ) return $base.'dashboard.php';
-        return null;
     }
 
 

@@ -5,6 +5,8 @@
 </head>
 
 <div class="wcssm-wrap">
+<?php include WCSS_DIR . 'frontend/pages/partials/manager-nav.php'; ?>
+
   <div class="wcssm-header">
     <h1>Edit Product</h1>
     <a href="<?php echo esc_url( home_url('/manager/products') ); ?>" class="btn btn-light">← Back to Products</a>

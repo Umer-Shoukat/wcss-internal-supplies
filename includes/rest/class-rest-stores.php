@@ -9,32 +9,53 @@ class WCSS_REST_Stores {
     }
 
     public function routes() {
+
         register_rest_route( self::NS, '/stores', [
-            'methods'=>'GET','permission_callback'=>[ $this,'can_manage' ],'callback'=>[ $this,'list' ],
+            'methods'  => 'GET',
+            'permission_callback' => [ $this, 'can_manage' ],
+            'callback' => [ $this, 'list' ],
+            'args'     => [
+                'page' => [
+                    'required' => false,
+                    'validate_callback' => function( $value ) { return is_numeric( $value ) && (int)$value >= 1; },
+                ],
+                'per_page' => [
+                    'required' => false,
+                    'validate_callback' => function( $value ) { return is_numeric( $value ) && (int)$value >= 1 && (int)$value <= 100; },
+                ],
+                'search' => [
+                    'required' => false,
+                    'sanitize_callback' => 'sanitize_text_field',
+                ],
+            ],
         ]);
+
         register_rest_route( self::NS, '/stores/(?P<id>\d+)', [
             'methods'=>'GET','permission_callback'=>[ $this,'can_manage' ],'callback'=>[ $this,'read' ],
         ]);
 
-        // ✅ Create
+        //  Create
         register_rest_route( self::NS, '/stores', [
             'methods'=>'POST','permission_callback'=>[ $this,'can_manage' ],'callback'=>[ $this,'create' ],
             'args'=>[
-                'name'=>['required'=>true,'sanitize_callback'=>'sanitize_text_field'],
-                'code'=>['required'=>false,'sanitize_callback'=>'sanitize_text_field'],
-                'city'=>['required'=>false,'sanitize_callback'=>'sanitize_text_field'],
-                'state'=>['required'=>false,'sanitize_callback'=>'sanitize_text_field'],
-                'quota'=>['required'=>false,'validate_callback'=>'is_numeric'],
-                'budget'=>['required'=>false,'sanitize_callback'=>'wc_format_decimal'],
+                'name'  => ['required'=>true,  'sanitize_callback'=>'sanitize_text_field'],
+                'code'  => ['required'=>false, 'sanitize_callback'=>'sanitize_text_field'],
+                'city'  => ['required'=>false, 'sanitize_callback'=>'sanitize_text_field'],
+                'state' => ['required'=>false, 'sanitize_callback'=>'sanitize_text_field'],
+                'quota' => [
+                    'required'=>false,
+                    'validate_callback'=> function( $value ) { return $value === '' || is_numeric( $value ); },
+                ],
+                'budget'=> ['required'=>false, 'sanitize_callback'=>'wc_format_decimal'],
             ],
         ]);
 
-        // ✅ Update
+        // Update
         register_rest_route( self::NS, '/stores/(?P<id>\d+)', [
             'methods'=>'PUT','permission_callback'=>[ $this,'can_manage' ],'callback'=>[ $this,'update' ],
         ]);
 
-        // ✅ Delete
+        //  Delete
         register_rest_route( self::NS, '/stores/(?P<id>\d+)', [
             'methods'=>'DELETE','permission_callback'=>[ $this,'can_manage' ],'callback'=>[ $this,'delete' ],
         ]);
@@ -47,13 +68,37 @@ class WCSS_REST_Stores {
     }
 
     public function list( WP_REST_Request $req ) {
-        $q = new WP_Query([
-            'post_type'=>'store_location',
-            'post_status'=>'publish',
-            'posts_per_page'=>50,
+        $page   = max( 1, (int) ( $req->get_param('page') ?: 1 ) );
+        $per    = min( 100, max( 1, (int) ( $req->get_param('per_page') ?: 20 ) ) );
+        $search = sanitize_text_field( (string) $req->get_param('search') );
+    
+        $args = [
+            'post_type'      => 'store_location',
+            'post_status'    => 'publish',
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+            'posts_per_page' => $per,
+            'paged'          => $page,
+            's'              => $search,
+            'no_found_rows'  => false, // we want totals
+            'fields'         => 'all',
+        ];
+    
+        $q = new WP_Query( $args );
+    
+        if ( is_wp_error( $q ) ) {
+            return new WP_Error( 'wcss_stores_query_failed', $q->get_error_message(), [ 'status' => 500 ] );
+        }
+    
+        $items = array_map( [ $this, 'dto' ], (array) $q->posts );
+    
+        return rest_ensure_response([
+            'items'       => $items,
+            'total'       => (int) $q->found_posts,
+            'total_pages' => (int) $q->max_num_pages,
+            'page'        => $page,
+            'per_page'    => $per,
         ]);
-        $items = array_map( [ $this, 'dto' ], $q->posts );
-        return rest_ensure_response([ 'items'=>$items ]);
     }
 
     public function read( WP_REST_Request $req ) {

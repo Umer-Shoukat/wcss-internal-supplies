@@ -269,6 +269,28 @@ add_action( 'woocommerce_order_status_changed', function( $order_id, $old, $new,
 //     }
 // } );
 
+// In your main plugin file (wcss-internal-supplies.php)
+
+register_activation_hook( __FILE__, [ 'WCSS_Plugin', 'activate' ] );
+register_deactivation_hook( __FILE__, [ 'WCSS_Plugin', 'deactivate' ] );
+
+class WCSS_Plugin {
+    public static function activate() {
+        // Make sure your rewrite rules are registered
+        $router = new WCSS_Route_Manager();
+        $router->register_rewrite();
+
+        // Flush them so WP rewrites with new rules
+        flush_rewrite_rules();
+    }
+
+    public static function deactivate() {
+        // On deactivate, just flush to clean out our custom rules
+        flush_rewrite_rules();
+    }
+}
+
+
 
 
 add_action('init', function(){

@@ -74,13 +74,12 @@ Contains all REST API endpoints.
 - Double enqueue in `class-routes-manager.php` (`wp_localize_script` repeated twice).
 - Some junk logging (`wc_get_logger`) should be replaced with centralized error handler.
 
-Account number: 20206 840 992674555 001
-Account opening date: 05 December 2024
-Client: HAMZA ALI ALI LIAQAT
-Bank: JSCB KAPITALBANK
-SWIFT code: KACHUZ22
-MFO: 01158
-City : bukhara
-Country : uzbekistan
+git add .
+git commit -m "✨ Store CRUD: Completed full Create, Read, Update, Delete flow with UI integration, pagination, and flash messaging
 
-20206840992674555001
+- Added store listing, create, edit, and delete pages
+- Integrated REST endpoints with validation and error handling
+- Connected frontend forms to backend REST API
+- Added success/error flash messages for actions
+- Improved CSS styling for listing and forms
+- Verified navigation and routing for stores under /manager/stores"

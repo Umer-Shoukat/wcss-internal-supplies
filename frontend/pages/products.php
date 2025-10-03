@@ -1,6 +1,11 @@
 <?php if ( ! defined('ABSPATH') ) exit; ?>
 <div class="wcssm-wrap">
   <?php include WCSS_DIR . 'frontend/pages/partials/manager-nav.php'; ?>
+
+
+  <div id="wcssm-flash" class="wcssm-flash" style="display:none;"></div>
+
+  
   <div class="flex-between">
     <h2>Products</h2>
     <a href="<?php echo esc_url( home_url('/manager/products/create') ); ?>" class="btn">+ Create Product</a>
