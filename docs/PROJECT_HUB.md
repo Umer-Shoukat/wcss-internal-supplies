@@ -83,3 +83,13 @@ git commit -m "✨ Store CRUD: Completed full Create, Read, Update, Delete flow 
 - Added success/error flash messages for actions
 - Improved CSS styling for listing and forms
 - Verified navigation and routing for stores under /manager/stores"
+
+- Added full REST CRUD for Orders (list, read, update status, patch, add note)
+- Integrated store mapping (store_id + store_name fallback from title/code)
+- Added ledger data (quota, budget, used/remaining orders & amounts)
+- Fixed undefined variable warnings for store_id and store_name
+- Updated orders_read() to include order items with SKU and variation info
+- Enhanced frontend order view with SKU display and styled status badges
+- Improved order status update logic (approve/reject) with page refresh & flash messages
+- Verified pagination, date filters, and status filters on order list
+- General JS refactor to use jQuery-safe syntax and consistent naming
