@@ -18,38 +18,6 @@ class WCSS_Route_Manager {
      *  /manager/{view}/{action}/{id}  -> wcssm={view}&wcssm_action={action}&wcssm_id={id}
      */
 
-/*
-     public function register_rewrite() {
-        // Manager dashboard home → /manager
-        add_rewrite_rule(
-            '^manager/?$',
-            'index.php?wcss=dashboard',
-            'top'
-        );
-    
-        // Manager section pages → /manager/products , /manager/stores etc.
-        add_rewrite_rule(
-            '^manager/([^/]+)/?$',
-            'index.php?wcss=$matches[1]',
-            'top'
-        );
-    
-        // Manager action pages → /manager/products/edit , /manager/stores/create
-        add_rewrite_rule(
-            '^manager/([^/]+)/([^/]+)/?$',
-            'index.php?wcss=$matches[1]&wcss_action=$matches[2]',
-            'top'
-        );
-    
-        // Manager item pages → /manager/products/edit/123
-        add_rewrite_rule(
-            '^manager/([^/]+)/([^/]+)/([0-9]+)/?$',
-            'index.php?wcss=$matches[1]&wcss_action=$matches[2]&wcss_id=$matches[3]',
-            'top'
-        );
-    }
-
-*/
 
     public function register_rewrite() {
         // Tell WP these query vars exist
@@ -89,7 +57,6 @@ class WCSS_Route_Manager {
         );
     }
 
-
     public function add_qv( $vars ) {
         $vars[] = 'wcss'; $vars[] = 'wcss_action'; $vars[] = 'wcss_id'; return $vars;
     }
@@ -122,14 +89,28 @@ class WCSS_Route_Manager {
             wp_enqueue_media();
         }
     
+        // wp_localize_script( 'wcss-manager', 'WCSSM', [
+        //     'rest'  => esc_url_raw( rest_url( 'wcss/v1/' ) ),
+        //     'nonce' => wp_create_nonce( 'wp_rest' ),
+        //     'home'  => home_url('/manager/'),
+        //     'view'  => get_query_var('wcss'),
+        //     'action'=> get_query_var('wcss_action'),
+        //     'id'    => absint( get_query_var('wcss_id') ),
+        // ]);
+
         wp_localize_script( 'wcss-manager', 'WCSSM', [
-            'rest'  => esc_url_raw( rest_url( 'wcss/v1/' ) ),
-            'nonce' => wp_create_nonce( 'wp_rest' ),
-            'home'  => home_url('/manager/'),
-            'view'  => get_query_var('wcss'),
-            'action'=> get_query_var('wcss_action'),
-            'id'    => absint( get_query_var('wcss_id') ),
+            'rest'         => esc_url_raw( rest_url( 'wcss/v1/' ) ),
+            'nonce'        => wp_create_nonce( 'wp_rest' ),
+    
+            // routing context for page-specific initializers
+            'view'         => (string) get_query_var( 'wcss' ),
+            'action'       => (string) get_query_var( 'wcss_action' ),
+            'id'           => absint( get_query_var( 'wcss_id' ) ),
+    
+            // convenience for building links from JS
+            'manager_base' => trailingslashit( home_url( '/manager' ) ),
         ]);
+        
 
     }
 
@@ -201,17 +182,6 @@ class WCSS_Route_Manager {
     }
 
 
-    // private function resolve_view( $base, $view, $action='' ) {
-    //     if ( $action ) {
-    //         $f = $base . sanitize_file_name($view.'-'.$action).'.php';
-    //         if ( file_exists($f) ) return $f;
-    //     }
-    //     $f = $base . sanitize_file_name($view).'.php';
-    //     if ( file_exists($f) ) return $f;
-    //     if ( $view === 'dashboard' && file_exists($base.'dashboard.php') ) return $base.'dashboard.php';
-    //     return null;
-    // }
-
     private function resolve_view( string $base, string $view, ?string $action ) {
         switch ( $view ) {
             case 'products':
@@ -223,7 +193,12 @@ class WCSS_Route_Manager {
                 if ( $action === 'create' ) return $base . 'stores-create.php';
                 if ( $action === 'edit' )   return $base . 'stores-edit.php';
                 return $base . 'stores.php';
-    
+
+            case 'orders':
+                if ( $action === 'create' ) return $base . 'order-create.php';
+                if ( $action === 'view' )   return $base . 'orders-view.php';
+                return $base . 'orders.php';
+
             default:
                 return $base . 'dashboard.php';
         }

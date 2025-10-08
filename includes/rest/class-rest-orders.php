@@ -9,17 +9,43 @@ class WCSS_REST_Orders {
     }
 
     public function routes() {
+
+
         register_rest_route( self::NS, '/orders', [
-            'methods' => 'GET', 'permission_callback' => [ $this, 'can_manage' ],
-            'callback' => [ $this, 'orders_list' ],
-            'args' => [
-                'status'    => ['sanitize_callback'=>'sanitize_text_field'],
-                'date_from' => ['sanitize_callback'=>'sanitize_text_field'],
-                'date_to'   => ['sanitize_callback'=>'sanitize_text_field'],
-                'page'      => ['validate_callback'=>'is_numeric'],
-                'per_page'  => ['validate_callback'=>'is_numeric'],
+            'methods'             => 'GET',
+            'permission_callback' => [ $this, 'can_manage' ],
+            'callback'            => [ $this, 'orders_list' ],
+            'args'                => [
+                'status' => [
+                    // optional: sanitize to a comma list of sanitized keys
+                    'sanitize_callback' => function( $param, $request, $key ) {
+                        $parts = array_filter( array_map( 'trim', explode( ',', (string) $param ) ) );
+                        $parts = array_map( 'sanitize_key', $parts );
+                        return implode( ',', $parts );
+                    },
+                ],
+                'date_from' => [
+                    'validate_callback' => function( $param, $request, $key ) {
+                        return empty( $param ) || (bool) strtotime( (string) $param );
+                    },
+                ],
+                'date_to' => [
+                    'validate_callback' => function( $param, $request, $key ) {
+                        return empty( $param ) || (bool) strtotime( (string) $param );
+                    },
+                ],
+                'page' => [
+                    'validate_callback' => function( $param, $request, $key ) {
+                        return is_numeric( $param ) && (int) $param >= 1;
+                    },
+                ],
+                'per_page' => [
+                    'validate_callback' => function( $param, $request, $key ) {
+                        return is_numeric( $param ) && (int) $param >= 1 && (int) $param <= 100;
+                    },
+                ],
             ],
-        ]);
+        ] );
 
         register_rest_route( self::NS, '/orders/(?P<id>\d+)', [
             'methods'=>'GET', 'permission_callback'=>[ $this,'can_manage' ],
@@ -65,68 +91,47 @@ class WCSS_REST_Orders {
     }
 
     /* ------------ Handlers ------------ */
-/*
-    public function orders_list( WP_REST_Request $req ) {
-        $page = max(1, (int) $req->get_param('page') ?: 1);
-        $per  = min(100, max(1, (int) $req->get_param('per_page') ?: 25));
-        $args = [
-            'type'    => 'shop_order',
-            'limit'   => $per,
-            'page'    => $page,
-            'return'  => 'objects',
-            'orderby' => 'date',
-            'order'   => 'DESC',
-        ];
-
-
-        if ( $s = $req->get_param('status') ) {
-            $args['status'] = array_map( fn($x)=> ltrim($x,'wc-'), array_map('trim', explode(',', $s)) );
-        }
-        $from = $req->get_param('date_from'); $to = $req->get_param('date_to');
-        if ( $from || $to ) {
-            $from = $from ? $from.' 00:00:00' : '1970-01-01 00:00:00';
-            $to   = $to   ? $to  .' 23:59:59' : current_time('mysql');
-            $args['date_created'] = $from . '...' . $to;
-        }
-        $orders = wc_get_orders( $args );
-        return rest_ensure_response([
-            'items' => array_map( [ $this, 'dto_order' ], $orders ),
-        ]);
-    }
-*/
 
     public function orders_list( WP_REST_Request $req ) {
         $page = max(1, (int) $req->get_param('page') ?: 1);
         $per  = min(100, max(1, (int) $req->get_param('per_page') ?: 25));
-    
+
+
         $args = [
-            'type'    => 'shop_order',
-            'limit'   => $per,
-            'page'    => $page,
-            'return'  => 'objects',
-            'orderby' => 'date',
-            'order'   => 'DESC',
+            // wc_get_orders ignores post_type/post_status; keep args minimal
+            'limit'    => $per,
+            'page'     => $page,
+            'return'   => 'objects',
+            'orderby'  => 'date',
+            'order'    => 'DESC',
         ];
-    
-        // Validate requested statuses against registered ones
-        $requested = [];
+
+
+            // ---- Status filter: accept "approved" OR "wc-approved" ----
         if ( $s = $req->get_param('status') ) {
             $requested = array_filter( array_map( 'trim', explode( ',', (string) $s ) ) );
-        }
-        if ( $requested ) {
-            // Registered statuses like "wc-pending" → we convert to "pending"
-            $valid_map = array_keys( wc_get_order_statuses() );            // ['wc-pending','wc-processing',...]
-            $valid     = array_map( fn($k) => ltrim( $k, 'wc-' ), $valid_map ); // ['pending','processing',...]
-    
-            $filtered = array_values( array_intersect( $requested, $valid ) );
-            if ( empty( $filtered ) ) {
-                // If nothing matches, avoid fatal — default to 'pending' (or remove to show all)
-                $filtered = [ 'pending' ];
+
+            if ( $requested ) {
+                // Valid slugs WITHOUT the "wc-" prefix
+                $valid_map = array_keys( wc_get_order_statuses() );             // ['wc-pending','wc-processing',...]
+                $valid     = array_map( function( $k ) { return substr( $k, 3 ); }, $valid_map ); // ['pending','processing',...]
+
+                // Normalize incoming → strip optional "wc-" prefix
+                $want = [];
+                foreach ( $requested as $x ) {
+                    $x = strtolower( trim( (string) $x ) );
+                    if ( strpos( $x, 'wc-' ) === 0 ) { $x = substr( $x, 3 ); }  // turn 'wc-approved' → 'approved'
+                    if ( in_array( $x, $valid, true ) ) { $want[] = $x; }
+                }
+
+                if ( ! empty( $want ) ) {
+                    $args['status'] = array_values( array_unique( $want ) );    // e.g. ['approved','rejected']
+                }
+                // If nothing valid is requested, don't force a fallback; show all instead.
             }
-            $args['status'] = $filtered;
         }
 
-    
+
         // (date filter unchanged)
         $from = $req->get_param('date_from'); $to = $req->get_param('date_to');
         if ( $from || $to ) {
@@ -134,16 +139,9 @@ class WCSS_REST_Orders {
             $to   = $to   ? $to  .' 23:59:59' : current_time('mysql');
             $args['date_created'] = $from . '...' . $to;
         }
-    
+
         $log  = wc_get_logger();
 
-        // try {
-        //     $orders = wc_get_orders( $args );
-        // } catch ( Throwable $e ) {
-        //     // ✅ Return a readable REST error instead of a 500 white-screen
-        //     return new WP_Error( 'wcss_orders_query_failed', $e->getMessage(), [ 'status' => 500 ] );
-        // }
-    
         try {
             $orders = wc_get_orders( $args );
         } catch ( Throwable $e ) {
@@ -155,10 +153,20 @@ class WCSS_REST_Orders {
             ]);
             return new WP_Error( 'wcss_orders_query_failed', 'Orders query failed.', [ 'status' => 500 ] );
         }
-    
+
         try {
             $items = array_map( [ $this, 'dto_order' ], $orders );
-            return rest_ensure_response( [ 'items' => $items ] );
+            // return rest_ensure_response( [ 'items' => $items ] );
+
+            return rest_ensure_response([
+                'items'       => $items,
+                'page'        => $page,
+                'per_page'    => $per,
+                'total'       => (int) $args['total'] ?? count($items), // fallback
+                'total_pages' => ceil( ((int)$args['total'] ?? count($items)) / $per ),
+            ]);
+
+
         } catch ( Throwable $e ) {
             $log->critical( 'WCSS orders_list map failed', [
                 'source' => 'wcss',
@@ -168,43 +176,74 @@ class WCSS_REST_Orders {
             return new WP_Error( 'wcss_orders_map_failed', 'Orders mapping failed.', [ 'status' => 500 ] );
         }
 
-        // return rest_ensure_response([
-        //     'items' => array_map( [ $this, 'dto_order' ], $orders ),
-        // ]);
     }
 
-
-    public function orders_read( WP_REST_Request $req ) {
-        $o = wc_get_order( (int) $req['id'] );
-        if ( ! $o ) return new WP_Error('not_found','Order not found',[ 'status'=>404 ]);
-        $dto = $this->dto_order( $o );
-        $dto['billing']  = $this->dto_addr( $o->get_address('billing') );
-        $dto['shipping'] = $this->dto_addr( $o->get_address('shipping') );
-        $dto['items']    = [];
-        foreach ( $o->get_items('line_item') as $it ) {
-            $dto['items'][] = [
-                'name' => $it->get_name(),
-                'qty'  => $it->get_quantity(),
-                'total'=> wc_price( $it->get_total() ),
-            ];
-        }
-        $dto['timeline'] = WCSS_Order_Events::for_order( $o->get_id(), 50 );
-        return rest_ensure_response( $dto );
-    }
 
     public function orders_update_status( WP_REST_Request $req ) {
         $o = wc_get_order( (int) $req['id'] );
         if ( ! $o ) return new WP_Error('not_found','Order not found',[ 'status'=>404 ]);
-        $status = sanitize_text_field( $req['status'] );
-        $note   = sanitize_textarea_field( (string) $req->get_param('note') );
+    
+        $status  = sanitize_text_field( $req['status'] );
+        $note    = sanitize_textarea_field( (string) $req->get_param('note') );
+        $override= (bool) $req->get_param('override');
+    
         $allowed = [ 'pending','awaiting-approval','approved','rejected','processing','completed','cancelled','on-hold' ];
         if ( ! in_array( $status, $allowed, true ) ) {
             return new WP_Error('bad_status','Status not allowed',[ 'status'=>400 ]);
         }
+    
+        // If moving to "approved", enforce limits unless override=1
+        if ( $status === 'approved' ) {
+            $store_id = (int) $o->get_meta('_wcss_store_id');
+            if ( $store_id ) {
+                $ym  = gmdate('Y-m');
+                $row = class_exists('WCSS_Ledger') ? WCSS_Ledger::get( $store_id, $ym ) : ['orders_count'=>0,'spend_total'=>0];
+    
+                $quota_used  = (int) ($row['orders_count'] ?? 0);
+                $budget_used = (float) ($row['spend_total'] ?? 0);
+    
+                $quota   = (int) get_post_meta( $store_id, '_store_quota',  true );
+                $budget  = (float) get_post_meta( $store_id, '_store_budget', true );
+                $order_total = (float) $o->get_total();
+    
+                $will_orders = $quota_used + 1;
+                $will_spend  = $budget_used + $order_total;
+    
+                $exceeds_count  = ($quota > 0)  && ($will_orders > $quota);
+                $exceeds_budget = ($budget > 0) && ($will_spend  > $budget);
+    
+                if ( ($exceeds_count || $exceeds_budget) && ! $override ) {
+                    // 409 with payload to show in UI
+                    return new WP_Error(
+                        'wcss_limit_block',
+                        __( 'Approving this order exceeds the store’s monthly limit.', 'wcss' ),
+                        [
+                            'status' => 409,
+                            'data'   => [
+                                'store_id'      => $store_id,
+                                'month'         => $ym,
+                                'quota'         => $quota,
+                                'quota_used'    => $quota_used,
+                                'will_orders'   => $will_orders,
+                                'budget'        => $budget,
+                                'budget_used'   => $budget_used,
+                                'order_total'   => $order_total,
+                                'will_spend'    => $will_spend,
+                                'currency'      => get_woocommerce_currency(),
+                            ],
+                        ]
+                    );
+                }
+            }
+        }
+        
+            // proceed
         $o->update_status( $status, $note ? $note : __( 'Status updated (Manager)', 'wcss' ), true );
-        WCSS_Order_Events::log( $o->get_id(), 'status_change', [ 'new'=>$status, 'note'=>$note ] );
+        WCSS_Order_Events::log( $o->get_id(), 'status_change', [ 'new'=>$status, 'note'=>$note, 'override'=>$override ] );
+    
         return rest_ensure_response([ 'ok'=>true ]);
     }
+
 
     public function orders_add_note( WP_REST_Request $req ) {
         $o = wc_get_order( (int) $req['id'] );
@@ -254,18 +293,120 @@ class WCSS_REST_Orders {
     /* ------------ DTO & helpers ------------ */
 
     private function dto_order( WC_Order $o ): array {
+
+            $store_id = (int) $o->get_meta( '_wcss_store_id' );
+            $store_id = $store_id ?: 0;
+        
+            // Robust store name resolution
+            $store_name = '';
+            if ( $store_id ) {
+                $p = get_post( $store_id );
+                if ( $p && ! is_wp_error( $p ) ) {
+                    $store_name = $p->post_title ?: '';
+                }
+                if ( $store_name === '' ) {
+                    // fall back to a useful code/meta so UI isn’t blank
+                    $code = get_post_meta( $store_id, '_store_code', true );
+                    if ( $code ) {
+                        $store_name = $code;
+                    }
+                }
+            }
         return [
-            'id'       => $o->get_id(),
-            'number'   => $o->get_order_number(),
-            'date'     => $o->get_date_created() ? $o->get_date_created()->date_i18n('Y-m-d H:i') : '',
-            'status'   => wc_get_order_status_name( $o->get_status() ),
-            'status_slug' => $o->get_status(),
-            'total'    => $o->get_formatted_order_total(),
-            'customer' => $o->get_billing_company() ?: $o->get_billing_email(),
-            'edd'      => $o->get_meta('_wcss_expected_delivery_date'),
-            'ref'      => $o->get_meta('_wcss_internal_ref'),
+            'id'         => $o->get_id(),
+            'number'     => $o->get_order_number(),
+            'date'       => $o->get_date_created() ? $o->get_date_created()->date_i18n('Y-m-d H:i') : '',
+            'status'     => wc_get_order_status_name( $o->get_status() ),
+            'status_slug'=> $o->get_status(),
+            'total'      => $o->get_total(),                  // raw numeric; JS can format
+            'total_html' => $o->get_formatted_order_total(),  // pretty
+            'customer'   => $o->get_billing_company() ?: $o->get_billing_email(),
+            'edd'        => $o->get_meta('_wcss_expected_delivery_date'),
+            'ref'        => $o->get_meta('_wcss_internal_ref'),
+    
+            // store context
+            'store'      => [
+                'id'   => $store_id,
+                'name' => $store_name,
+            ],
+        ];
+
+    }
+
+
+public function orders_read( WP_REST_Request $req ) {
+    $o = wc_get_order( (int) $req['id'] );
+    if ( ! $o ) return new WP_Error('not_found','Order not found',[ 'status'=>404 ]);
+
+    $dto = $this->dto_order( $o );
+
+    // Addresses
+    $dto['billing']  = $this->dto_addr( $o->get_address('billing') );
+    $dto['shipping'] = $this->dto_addr( $o->get_address('shipping') );
+
+    // Items (include SKU, product/variation IDs)
+    $dto['items'] = [];
+    foreach ( $o->get_items() as $item_id => $item ) {
+        if ( ! $item instanceof WC_Order_Item_Product ) continue;
+
+        $product   = $item->get_product();              // may be null if deleted
+        $name      = $item->get_name();
+        $qty       = (int) $item->get_quantity();
+        $line_total= (float) $item->get_total();
+        $sku       = $product instanceof WC_Product ? $product->get_sku() : '';
+        $pid       = $product instanceof WC_Product ? $product->get_id() : 0;
+        $vid       = $product instanceof WC_Product_Variation ? $product->get_id() : 0;
+
+        // Variation attributes (optional, handy in UI)
+        $attrs = [];
+        if ( $product instanceof WC_Product_Variation ) {
+            $attrs = $product->get_attributes();
+        } elseif ( method_exists( $item, 'get_variation_attributes' ) ) {
+            $attrs = $item->get_variation_attributes();
+        }
+
+        $dto['items'][] = [
+            'item_id'     => $item_id,
+            'product_id'  => $pid ?: $item->get_product_id(),
+            'variation_id'=> $vid ?: $item->get_variation_id(),
+            'name'        => $name,
+            'sku'         => $sku,
+            'qty'         => $qty,
+            'subtotal'    => wc_price( (float) $item->get_subtotal() ),
+            'total'       => wc_price( $line_total ),
+            'attributes'  => $attrs,
         ];
     }
+
+    // Timeline/events if you’re using it
+    if ( class_exists( 'WCSS_Order_Events' ) ) {
+        $dto['timeline'] = WCSS_Order_Events::for_order( $o->get_id(), 50 );
+    }
+
+    // Attach ledger only if store set
+    if ( ! empty( $dto['store']['id'] ) && class_exists( 'WCSS_Ledger' ) ) {
+        $ym  = gmdate('Y-m');
+        $row = WCSS_Ledger::get( (int) $dto['store']['id'], $ym ) ?: [ 'orders_count'=>0, 'spend_total'=>0 ];
+        $quota  = (int) get_post_meta( (int) $dto['store']['id'], '_store_quota',  true );
+        $budget = (float) get_post_meta( (int) $dto['store']['id'], '_store_budget', true );
+
+        $dto['ledger'] = [
+            'month'            => $ym,
+            'used_orders'      => (int) ($row['orders_count'] ?? 0),
+            'used_amount'      => (float) ($row['spend_total'] ?? 0),
+            'quota'            => $quota,
+            'budget'           => $budget,
+            'remaining_orders' => max(0, $quota - (int) ($row['orders_count'] ?? 0)),
+            'remaining_amount' => max(0.0, $budget - (float) ($row['spend_total'] ?? 0)),
+            'currency'         => get_woocommerce_currency(),
+        ];
+    }
+
+    return rest_ensure_response( $dto );
+}
+
+
+
     private function dto_addr( array $a ): array {
         return [
             'first_name'=>$a['first_name'] ?? '', 'last_name'=>$a['last_name'] ?? '',

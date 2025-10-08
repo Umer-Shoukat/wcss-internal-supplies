@@ -126,9 +126,7 @@
         <div>${(p.vendor || "").replace(/</g, "&lt;")}</div>
         <div>${p.price_html || p.price || ""}</div>
         <div class="actions">
-          <a class="btn btn-sm" href="${WCSSM.home}products/edit/${
-            p.id
-          }">Edit</a>
+          <a class="btn btn-sm" href="edit/${p.id}">Edit</a>
           <button class="btn btn-sm btn-danger delete-product" data-id="${
             p.id
           }">Delete</button>
@@ -484,10 +482,6 @@
 
 /* store curd below */
 
-// -------------------------------------
-// STORES – List
-// -------------------------------------
-
 (function ($) {
   window.initStoresList = function () {
     const $grid = $("#wcssm-stores-grid");
@@ -772,3 +766,507 @@
       });
   };
 })(jQuery);
+
+/* orders list functions */
+
+/* ===== ORDERS MODULE ===== */
+(function ($) {
+  window.initOrdersList = function () {
+    const $grid = $("#wcssm-orders-grid");
+    const $flash = $("#wcssm-flash");
+    const $status = $("#o-status");
+    const $from = $("#o-from");
+    const $to = $("#o-to");
+    const $apply = $("#o-apply");
+    const $clear = $("#o-clear");
+    const $refresh = $("#o-refresh");
+
+    const state = {
+      page: 1,
+      per_page: 20,
+      total_pages: 1,
+      total: 0,
+      status: "",
+      from: "",
+      to: "",
+    };
+
+    function flash(msg, ok = true) {
+      $flash
+        .removeClass("is-ok is-err")
+        .addClass(ok ? "is-ok" : "is-err")
+        .text(msg)
+        .stop(true, true)
+        .fadeIn(120);
+      setTimeout(() => $flash.fadeOut(180), 2500);
+    }
+
+    function escapeHtml(s) {
+      return (s || "")
+        .toString()
+        .replace(
+          /[&<>"]/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])
+        );
+    }
+
+    function canApprove(slug) {
+      return ["pending", "awaiting-approval", "on-hold"].includes(slug);
+    }
+    function canReject(slug) {
+      return ["pending", "awaiting-approval", "on-hold", "approved"].includes(
+        slug
+      );
+    }
+
+    function render(items) {
+      const head = `
+        <div class="row head">
+          <div>#</div>
+          <div>Date</div>
+          <div>Status</div>
+          <div>Total</div>
+          <div>Customer</div>
+          <div>EDD</div>
+          <div>Ref</div>
+          <div>Actions</div>
+        </div>`;
+
+      const rows = (items || [])
+        .map((o) => {
+          const act = [];
+          if (canApprove(o.status_slug)) {
+            act.push(
+              `<button class="btn btn-xs o-approve" data-id="${o.id}">Approve</button>`
+            );
+          }
+          if (canReject(o.status_slug)) {
+            act.push(
+              `<button class="btn btn-xs btn-danger o-reject" data-id="${o.id}">Reject</button>`
+            );
+          }
+          act.push(
+            `<button class="btn btn-xs o-view" data-id="${o.id}">View</button>`
+          );
+
+          return `
+          <div class="row">
+            <div>${escapeHtml(o.number || "#" + o.id)}</div>
+            <div>${escapeHtml(o.date || "")}</div>
+            <div><span class="badge status-${escapeHtml(
+              o.status_slug
+            )}">${escapeHtml(o.status)}</span></div>
+            <div>${o.total || ""}</div>
+            <div>${escapeHtml(o.customer || "")}</div>
+            <div>${escapeHtml(o.edd || "")}</div>
+            <div>${escapeHtml(o.ref || "")}</div>
+            <div class="acts">${act.join(" ")}</div>
+          </div>`;
+        })
+        .join("");
+
+      const pager = `
+        <div class="pager-bar">
+          <button type="button" class="btn pager-prev" ${
+            state.page <= 1 ? "disabled" : ""
+          }>← Prev</button>
+          <span class="pager-info">Page ${state.page} / ${
+        state.total_pages
+      } · ${state.total} orders</span>
+          <button type="button" class="btn pager-next" ${
+            state.page >= state.total_pages ? "disabled" : ""
+          }>Next →</button>
+        </div>`;
+
+      $grid.html(head + rows + pager);
+    }
+
+    function load() {
+      $grid.html("Loading…");
+      const qs = $.param({
+        page: state.page,
+        per_page: state.per_page,
+        status: state.status || "",
+        date_from: state.from || "",
+        date_to: state.to || "",
+      });
+      $.ajax({
+        url: WCSSM.rest + "orders?" + qs,
+        headers: { "X-WP-Nonce": WCSSM.nonce },
+        dataType: "json",
+      })
+        .done(function (d) {
+          state.total = d.total || 0;
+          state.total_pages = d.total_pages || 1;
+          render(d.items || []);
+        })
+        .fail(function (x) {
+          $grid.html("Error: " + (x.responseJSON?.message || x.statusText));
+        });
+    }
+
+    // Filters
+    $apply.on("click", function () {
+      state.page = 1;
+      state.status = $status.val() || "";
+      state.from = $from.val() || "";
+      state.to = $to.val() || "";
+      load();
+    });
+    $clear.on("click", function () {
+      $status.val("");
+      $from.val("");
+      $to.val("");
+      state.page = 1;
+      state.status = "";
+      state.from = "";
+      state.to = "";
+      load();
+    });
+    $refresh.on("click", function () {
+      load();
+    });
+
+    // Pager (delegated)
+    $grid.on("click", ".pager-prev", function (e) {
+      e.preventDefault();
+      if (state.page > 1) {
+        state.page--;
+        load();
+      }
+    });
+    $grid.on("click", ".pager-next", function (e) {
+      e.preventDefault();
+      if (state.page < state.total_pages) {
+        state.page++;
+        load();
+      }
+    });
+
+    // Actions
+    $grid.on("click", ".o-approve", function () {
+      const id = parseInt($(this).data("id"), 10);
+      $.ajax({
+        url: WCSSM.rest + "orders/" + id + "/status",
+        method: "POST",
+        headers: {
+          "X-WP-Nonce": WCSSM.nonce,
+          "Content-Type": "application/json",
+        },
+        data: JSON.stringify({ status: "approved" }),
+        dataType: "json",
+      })
+        .done(function () {
+          flash("Order approved.", true);
+          load();
+        })
+        .fail(function (x) {
+          flash(
+            "Approve failed: " + (x.responseJSON?.message || x.statusText),
+            false
+          );
+        });
+    });
+
+    $grid.on("click", ".o-reject", function () {
+      const id = parseInt($(this).data("id"), 10);
+      const note = prompt("Add a rejection note (optional):") || "";
+      $.ajax({
+        url: WCSSM.rest + "orders/" + id + "/status",
+        method: "POST",
+        headers: {
+          "X-WP-Nonce": WCSSM.nonce,
+          "Content-Type": "application/json",
+        },
+        data: JSON.stringify({ status: "rejected", note }),
+        dataType: "json",
+      })
+        .done(function () {
+          flash("Order rejected.", true);
+          load();
+        })
+        .fail(function (x) {
+          flash(
+            "Reject failed: " + (x.responseJSON?.message || x.statusText),
+            false
+          );
+        });
+    });
+
+    // });
+
+    $grid.on("click", ".o-view", function (e) {
+      e.preventDefault();
+      const id = parseInt($(this).data("id"), 10);
+      if (!id) return;
+
+      // Prefer a base passed from PHP; fallback to /manager/
+      const base =
+        window.WCSSM && WCSSM.manager_base ? WCSSM.manager_base : "/manager/";
+      const url = base.replace(/\/+$/, "/") + "orders/view/" + id;
+
+      if (e.ctrlKey || e.metaKey) {
+        // open in new tab if user holds Ctrl/Cmd
+        window.open(url, "_blank");
+      } else {
+        window.location.assign(url);
+      }
+    });
+
+    load();
+  };
+})(jQuery);
+
+window.initOrderView = function initOrderView(orderId) {
+  var $wrap = jQuery("#order-detail");
+  $wrap.html("<p>Loading...</p>");
+
+  fetch((WCSSM.rest || "/wp-json/wcss/v1/") + "orders/" + orderId, {
+    headers: { "X-WP-Nonce": WCSSM.nonce },
+  })
+    .then(function (r) {
+      return r.json();
+    })
+    .then(function (data) {
+      if (data && data.code) {
+        $wrap.html(
+          "<div class='flash-error'>Error: " +
+            (data.message || "Failed") +
+            "</div>"
+        );
+        return;
+      }
+
+      // ledger + store blocks (optional UI, shown only if present)
+      var ledgerBlock = "";
+      if (data && data.ledger) {
+        var l = data.ledger;
+        var fmt = function (n) {
+          try {
+            return new Intl.NumberFormat(undefined, {
+              style: "currency",
+              currency: l.currency,
+            }).format(+n || 0);
+          } catch (e) {
+            return (l.currency || "") + " " + (n || 0);
+          }
+        };
+        ledgerBlock =
+          "<h3>Monthly Usage</h3>" +
+          "<div class='ov-ledger'>" +
+          "<p><strong>Month:</strong> " +
+          (l.month || "") +
+          "</p>" +
+          "<p><strong>Orders:</strong> " +
+          (l.used_orders || 0) +
+          " / " +
+          (l.quota || "∞") +
+          "</p>" +
+          "<p><strong>Spend:</strong> " +
+          fmt(l.used_amount || 0) +
+          " / " +
+          (l.budget ? fmt(l.budget) : "∞") +
+          "</p>" +
+          "<p><strong>Remaining Orders:</strong> " +
+          (l.quota ? Math.max(0, l.quota - (l.used_orders || 0)) : "∞") +
+          "</p>" +
+          "<p><strong>Remaining Budget:</strong> " +
+          (l.budget
+            ? fmt(Math.max(0, (l.budget || 0) - (l.used_amount || 0)))
+            : "∞") +
+          "</p>" +
+          "</div>";
+      }
+
+      var storeLine = "";
+      if (data && data.store && (data.store.name || data.store.id)) {
+        storeLine =
+          "<p><strong>Store:</strong> " +
+          (data.store.name || "#" + data.store.id) +
+          "</p>";
+      }
+
+      var html =
+        "<div class='order-meta'>" +
+        "<h2>Order #" +
+        (data.number || orderId) +
+        "</h2>" +
+        "<p><strong>Date:</strong> " +
+        (data.date || "") +
+        "</p>" +
+        "<p><strong>Status:</strong> " +
+        (data.status || "") +
+        "</p>" +
+        "<p><strong>Total:</strong> " +
+        (data.total_html || data.total || "") +
+        "</p>" +
+        "<p><strong>Customer:</strong> " +
+        (data.customer || "") +
+        "</p>" +
+        storeLine +
+        "</div>" +
+        "<h3>Items</h3>" +
+        "<table class='table'>" +
+        "<thead><tr><th>Product</th><th>SKU</th><th>Qty</th><th>Total</th></tr></thead>" +
+        "<tbody>" +
+        (Array.isArray(data.items)
+          ? data.items
+              .map(function (i) {
+                return (
+                  "<tr>" +
+                  "<td>" +
+                  (i.name || "") +
+                  "</td>" +
+                  "<td>" +
+                  (i.sku
+                    ? "<br><span class='muted sku'>SKU: " + i.sku + "</span>"
+                    : "") +
+                  "</td>" +
+                  "<td>" +
+                  (i.qty || 0) +
+                  "</td>" +
+                  "<td>" +
+                  (i.total || "") +
+                  "</td>" +
+                  "</tr>"
+                );
+              })
+              .join("")
+          : "<tr><td colspan='3'>No items</td></tr>") +
+        "</tbody>" +
+        "</table>" +
+        ledgerBlock +
+        "<h3>Update Status</h3>" +
+        "<div class='actions'>" +
+        "<button class='btn btn-success' id='order-approve'>Approve</button> " +
+        "<button class='btn btn-danger' id='order-reject'>Reject</button>" +
+        "</div>" +
+        "<div id='order-msg'></div>";
+
+      $wrap.html(html);
+
+      jQuery("#order-approve").on("click", function () {
+        updateStatus("approved");
+      });
+      jQuery("#order-reject").on("click", function () {
+        updateStatus("rejected");
+      });
+
+      function updateStatus(newStatus, opts) {
+        opts = opts || {};
+        var payload = { status: newStatus };
+        if (opts.override) payload.override = 1;
+        if (opts.note) payload.note = opts.note;
+
+        fetch(
+          (WCSSM.rest || "/wp-json/wcss/v1/") + "orders/" + orderId + "/status",
+          {
+            method: "POST",
+            headers: {
+              "X-WP-Nonce": WCSSM.nonce,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          }
+        )
+          .then(function (r) {
+            // Handle 409 (limit exceeded) specially
+            if (r.status === 409)
+              return r.json().then(function (j) {
+                j.__status = 409;
+                return j;
+              });
+            return r.json();
+          })
+          .then(function (res) {
+            // Limit exceeded → show confirm with details, allow override
+            if (res && res.__status === 409 && res.data) {
+              var d = res.data;
+              var money = function (n) {
+                try {
+                  return new Intl.NumberFormat(undefined, {
+                    style: "currency",
+                    currency: d.currency,
+                  }).format(+n || 0);
+                } catch (e) {
+                  return (d.currency || "") + " " + (n || 0);
+                }
+              };
+              var msg = "Approving this order exceeds the store limits:\n";
+              if (d.quota)
+                msg += "• Orders: " + d.will_orders + " / " + d.quota + "\n";
+              if (d.budget)
+                msg +=
+                  "• Spend: " +
+                  money(d.will_spend) +
+                  " / " +
+                  money(d.budget) +
+                  "\n";
+              msg += "\nProceed anyway?";
+              if (window.confirm(msg)) {
+                var note = window.prompt(
+                  "Add a note (optional):",
+                  "Approved with override"
+                );
+                updateStatus("approved", { override: true, note: note || "" });
+              } else {
+                jQuery("#order-msg").html(
+                  "<div class='flash-error'>Approval cancelled.</div>"
+                );
+              }
+              return;
+            }
+
+            if (res && res.ok) {
+              jQuery("#order-msg").html(
+                "<div class='flash-success'>Status updated to " +
+                  newStatus +
+                  "!</div>"
+              );
+              // go back to orders list after a short pause
+              setTimeout(function () {
+                window.location.href =
+                  (WCSSM.manager_base || "/manager/") + "orders";
+              }, 500);
+            } else {
+              jQuery("#order-msg").html(
+                "<div class='flash-error'>" +
+                  (res && res.message ? res.message : "Failed") +
+                  "</div>"
+              );
+            }
+          })
+          .catch(function (e) {
+            jQuery("#order-msg").html(
+              "<div class='flash-error'>Request failed</div>"
+            );
+          });
+      }
+    })
+    .catch(function () {
+      $wrap.html("<div class='flash-error'>Failed to load order.</div>");
+    });
+};
+
+// Global bootstrap for page-specific initializers
+// jQuery(function ($) {
+//   if (!window.WCSSM) return;
+//   console.log("initiator....");
+//   // Orders → view
+//   if (WCSSM.view === "orders" && WCSSM.action === "view" && WCSSM.id) {
+//     if (typeof window.initOrderView === "function") {
+//       window.initOrderView(WCSSM.id);
+//       console.log("initiator.... if");
+//     } else {
+//       console.log("initiator.... else");
+//       // In case scripts are still settling, try once more shortly
+//       setTimeout(function () {
+//         if (typeof window.initOrderView === "function") {
+//           window.initOrderView(WCSSM.id);
+//         }
+//       }, 50);
+//     }
+//   }
+
+//   // (You can keep similar bootstraps for products/stores, etc.)
+// });

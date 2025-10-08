@@ -318,3 +318,14 @@ add_action('template_redirect', function(){
     }
 }, 0);
 
+
+
+// saving store information on checkout
+
+
+add_action('woocommerce_checkout_create_order', function( $order, $data ){
+    $store_id = (int) get_user_meta( get_current_user_id(), '_wcss_store_id', true );
+    if ( $store_id ) {
+        $order->update_meta_data( '_wcss_store_id', $store_id );
+    }
+}, 10, 2);
