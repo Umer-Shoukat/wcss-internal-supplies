@@ -1440,3 +1440,230 @@
       });
   };
 })(jQuery);
+
+(function ($) {
+  // ===== Dashboard =====
+  (function ($) {
+    // ===== Dashboard =====
+    window.initDashboard = function () {
+      var $flash = $("#wcssm-flash");
+
+      function flash(msg, ok) {
+        $flash
+          .removeClass("is-ok is-err")
+          .addClass(ok ? "is-ok" : "is-err")
+          .text(msg)
+          .stop(true, true)
+          .fadeIn(120);
+        setTimeout(function () {
+          $flash.fadeOut(180);
+        }, 1800);
+      }
+
+      function money(n, ccy) {
+        try {
+          return new Intl.NumberFormat(undefined, {
+            style: "currency",
+            currency: ccy || "USD",
+          }).format(+n || 0);
+        } catch (e) {
+          return (ccy || "") + " " + (+n || 0).toFixed(2);
+        }
+      }
+
+      function esc(s) {
+        return String(s || "").replace(
+          /[&<>"]/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])
+        );
+      }
+
+      function render(d) {
+        // ---- cards
+        var pendingAll =
+          (d.counts?.pending || 0) + (d.counts?.["awaiting-approval"] || 0);
+        $("#m-pending").text(pendingAll);
+        $("#m-approved").text(d.counts?.approved || 0);
+        $("#m-rejected").text(d.counts?.rejected || 0);
+        $("#m-revenue").text(money(d.sales?.revenue, d.sales?.currency));
+
+        // ---- stores
+        $("#st-total").text(d.stores?.total || 0);
+        $("#st-active").text(d.stores?.active || 0);
+
+        // ---- vendors table (tbody of #v-table)
+        var vRows = (Array.isArray(d.vendors) ? d.vendors : [])
+          .map(function (v) {
+            return (
+              "<tr>" +
+              "<td>" +
+              esc(v.name || "Vendor #" + (v.id || "")) +
+              "</td>" +
+              "<td>" +
+              (v.orders || 0) +
+              "</td>" +
+              "<td>" +
+              money(v.revenue || 0, d.sales?.currency) +
+              "</td>" +
+              "</tr>"
+            );
+          })
+          .join("");
+        $("#v-table tbody").html(
+          vRows ||
+            "<tr><td colspan='3' class='muted'>No vendor activity.</td></tr>"
+        );
+
+        // ---- trend bars (container #trend, simple CSS bars)
+        // var max = Math.max.apply(
+        //   null,
+        //   (d.trend || [])
+        //     .map(function (x) {
+        //       return x.orders || 0;
+        //     })
+        //     .concat([1])
+        // );
+        // var bars = (d.trend || [])
+        //   .map(function (x) {
+        //     var pct = Math.round(((x.orders || 0) / max) * 100);
+        //     return (
+        //       "<div class='bar'>" +
+        //       "<span style='height:" +
+        //       pct +
+        //       "%'></span>" +
+        //       "<em>" +
+        //       esc(x.ym) +
+        //       "</em>" +
+        //       "</div>"
+        //     );
+        //   })
+        //   .join("");
+        // $("#trend").html(bars || "<p class='muted'>No recent orders.</p>");
+
+        // trend bars
+        var trend = Array.isArray(d.trend) ? d.trend : [];
+        var max = Math.max.apply(
+          null,
+          trend
+            .map(function (x) {
+              return +x.orders || 0;
+            })
+            .concat([1])
+        );
+
+        var bars = trend
+          .map(function (x) {
+            var orders = +x.orders || 0;
+            var pct = max > 0 ? Math.round((orders / max) * 100) : 0;
+            return (
+              "<div class='bar'>" +
+              "<i class='val'>Orders: " +
+              orders +
+              "</i>" +
+              "<span style='--h:" +
+              pct +
+              "%;height:" +
+              pct +
+              "%'>" +
+              "</span>" +
+              "<em>" +
+              (x.ym || "") +
+              "</em>" +
+              "</div>"
+            );
+          })
+          .join("");
+
+        $("#trend").html(
+          bars || "<p class='muted'>No orders in recent months.</p>"
+        );
+
+        // ---- ledger (tbody of #ledger-tbl)
+        // JSON sample had: { store_id, store, orders, spend, quota?, budget? }
+
+        var lrows = Array.isArray(d.ledger) ? d.ledger : [];
+
+        var lrows = (d.ledger || [])
+          .map(function (r) {
+            console.log(r);
+            return (
+              "<tr><td>" +
+              (r.store || "" + (r.store || "")) +
+              "</td>" +
+              "<td>" +
+              (r.store || "#" + (r.store_id || "")) +
+              "</td>" +
+              "<td>" +
+              (r.orders || 0) +
+              "</td>" +
+              "<td>" +
+              (typeof r.quota !== "undefined" ? r.quota : "∞") +
+              "</td>" +
+              "<td>" +
+              money(r.spend || 0, d.sales?.currency) +
+              "</td>" +
+              "<td>" +
+              (typeof r.budget !== "undefined"
+                ? money(r.budget, d.sales?.currency)
+                : "∞") +
+              "</td></tr>"
+            );
+          })
+          .join("");
+
+        // var lrows = (Array.isArray(d.ledger) ? d.ledger : [])
+        //   .map(function (r) {
+        //     return (
+        //       "<tr>" +
+        //       "<td>" +
+        //       esc(r.store || "#" + (r.store_id || "")) +
+        //       "</td>" +
+        //       "<td>" +
+        //       (r.orders || 0) +
+        //       "</td>" +
+        //       "<td>" +
+        //       (typeof r.quota !== "undefined" ? r.quota : "∞") +
+        //       "</td>" +
+        //       "<td>" +
+        //       money(r.spend || 0, d.sales?.currency) +
+        //       "</td>" +
+        //       "<td>" +
+        //       (typeof r.budget !== "undefined"
+        //         ? money(r.budget, d.sales?.currency)
+        //         : "∞") +
+        //       "</td>" +
+        //       "</tr>"
+        //     );
+        //   })
+        //   .join("");
+
+        $("#ledger-tbl tbody").html(
+          lrows ||
+            "<tr><td colspan='5' class='muted'>No store activity.</td></tr>"
+        );
+      }
+
+      function load() {
+        $.ajax({
+          url: (WCSSM.rest || "/wp-json/wcss/v1/") + "reports/overview",
+          headers: { "X-WP-Nonce": WCSSM.nonce },
+          dataType: "json",
+        })
+          .done(function (d) {
+            render(d);
+          })
+          .fail(function (x) {
+            flash(
+              x.responseJSON?.message ||
+                x.statusText ||
+                "Failed to load dashboard",
+              false
+            );
+          });
+      }
+
+      $("#dash-refresh").off("click").on("click", load);
+      load();
+    };
+  })(jQuery);
+})(jQuery);

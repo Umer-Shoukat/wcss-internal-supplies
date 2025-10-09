@@ -93,3 +93,25 @@ git commit -m "✨ Store CRUD: Completed full Create, Read, Update, Delete flow 
 - Improved order status update logic (approve/reject) with page refresh & flash messages
 - Verified pagination, date filters, and status filters on order list
 - General JS refactor to use jQuery-safe syntax and consistent naming
+
+- REST: add reports overview endpoint (class-rest-reports.php::dashboard)
+  - Monthly counts by status
+  - Sales summary (orders + revenue)
+  - Active/total stores
+  - Trend (last 6 months)
+  - Top vendors (orders + revenue)
+  - Store ledger for current month (store name, orders, spend, quota/budget/usage)
+- Products REST/DTO: vendor object and vendor_ids carried through
+- Vendors: popup create-from-edit (basic validation, inline success/error)
+- Frontend (manager.js):
+  - initDashboard(): renders cards, top vendors table, 6-month trend bars,
+    and store budgets table (uses store titles)
+  - Shows counts, revenue with currency, and handles refresh
+  - Trend bars now overlay order counts
+- CSS (manager.css):
+  - Minor styles for trend bar value overlay and dashboard blocks
+- Routing/Views:
+  - dashboard.php wired to initDashboard (no class name changes)
+- Fixes:
+  - Guarded null/empty arrays in render paths
+  - Kept existing classes/markup; only added IDs where needed

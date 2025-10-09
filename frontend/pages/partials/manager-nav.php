@@ -24,10 +24,11 @@ $current_user = wp_get_current_user();
       <span>Manager Dashboard</span>
     </a>
     <ul class="nav-links">
+      <li><a href="<?php echo esc_url( home_url('/manager/') ); ?>">Dashboard</a></li>
       <li><a href="<?php echo esc_url( home_url('/manager/orders') ); ?>">Orders</a></li>
       <li><a href="<?php echo esc_url( home_url('/manager/products') ); ?>">Products</a></li>
       <li><a href="<?php echo esc_url( home_url('/manager/stores') ); ?>">Stores</a></li>
-      <li><a href="<?php echo esc_url( home_url('/manager/reports') ); ?>">Reports</a></li>
+
     </ul>
   </div>
 

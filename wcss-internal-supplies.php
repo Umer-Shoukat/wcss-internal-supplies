@@ -50,6 +50,8 @@ require_once WCSS_DIR . 'includes/rest/class-rest-ledger.php';
 
 require_once WCSS_DIR . 'includes/class-wcss-vendors.php';
 require_once WCSS_DIR . 'includes/rest/class-rest-vendors.php';
+require_once WCSS_DIR . 'includes/rest/class-rest-reports.php';
+
 
 
 
@@ -187,6 +189,7 @@ add_action( 'wcss_bootstrap', function () {
     new WCSS_REST_Ledger();
     new WCSS_Vendors();
     new WCSS_REST_Vendors();
+    new WCSS_REST_Reports();
 
 } );
 
