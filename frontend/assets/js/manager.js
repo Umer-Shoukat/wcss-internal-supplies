@@ -1,63 +1,65 @@
 //  starting product CRUD JS
 (function ($) {
-  /* Helpers */
-  function loadProductMeta() {
-    return $.ajax({
-      url: WCSSM.rest + "products/meta",
-      headers: { "X-WP-Nonce": WCSSM.nonce },
-    }).then(function (meta) {
-      const $cats = $("#p-categories").empty();
-      (meta.categories || []).forEach(function (c) {
-        $("<option>").val(c.id).text(c.name).appendTo($cats);
-      });
-      return meta;
-    });
+  // one media frame per page to avoid duplicate handlers
+  var _mediaFrame = null;
+
+  function managerBase() {
+    return (window.WCSSM && (WCSSM.home || WCSSM.manager_base)) || "/manager/";
   }
+
+  /* Helpers */
 
   function attachMediaPicker() {
     if (typeof wp === "undefined" || !wp.media) return;
-    let frame = null;
+
     $("#p-pick-images")
-      .off("click")
-      .on("click", function (e) {
+      .off("click.wcssm")
+      .on("click.wcssm", function (e) {
         e.preventDefault();
-        if (!frame) {
-          frame = wp.media({
+        if (!_mediaFrame) {
+          _mediaFrame = wp.media({
             title: "Select product images",
             button: { text: "Use these" },
             multiple: true,
+            library: { type: "image" },
           });
-          frame.on("select", function () {
-            const sel = frame.state().get("selection");
+
+          _mediaFrame.on("select", function () {
+            const sel = _mediaFrame.state().get("selection");
             const ids = [];
-            $("#p-images-preview").empty();
+            const $prev = $("#p-images-preview").empty();
+
             sel.each(function (att) {
               const id = att.get("id");
-              ids.push(id);
               const url = att.get("sizes")?.thumbnail?.url || att.get("url");
-              $("#p-images-preview").append('<img src="' + url + '" alt="">');
+              if (id) ids.push(id);
+              if (url) $prev.append('<img src="' + url + '" alt="">');
             });
+
             $("#p-images-ids").val(ids.join(","));
           });
         }
-        frame.open();
+        _mediaFrame.open();
       });
   }
 
   function collectPayload() {
     const catIds = ($("#p-categories").val() || []).map((v) => parseInt(v, 10));
     const vendorIds = ($("#p-vendors").val() || []).map((v) => parseInt(v, 10));
+
     const imageIds = ($("#p-images-ids").val() || "")
       .toString()
       .split(",")
       .map((v) => parseInt(v, 10) || null)
       .filter(Boolean);
+
     return {
       name: $("#p-name").val(),
       sku: $("#p-sku").val(),
       price: $("#p-price").val(),
       short_description: $("#p-short").val(),
       category_ids: catIds,
+      // keep these keys – your REST accepts both "vendor" (name) and "vendor_ids"
       brand: $("#p-brand").val(),
       vendor: $("#p-vendor").val(),
       vendor_ids: vendorIds,
@@ -68,13 +70,13 @@
       status: $("#p-status").val(),
     };
   }
-
   function bindNewVendorButton() {
     $("#p-add-vendor")
-      .off("click")
-      .on("click", function () {
-        const name = prompt("New vendor name:");
+      .off("click.wcssm")
+      .on("click.wcssm", function () {
+        const name = window.prompt("New vendor name:");
         if (!name) return;
+
         $.ajax({
           url: WCSSM.rest + "vendors",
           method: "POST",
@@ -83,12 +85,15 @@
             "Content-Type": "application/json",
           },
           data: JSON.stringify({ name: name }),
+          dataType: "json",
         })
           .done(function (t) {
             // add & select
-            $("#p-vendors").append(
-              $("<option>").val(t.id).text(t.name).prop("selected", true)
-            );
+            $("<option>")
+              .val(t.id)
+              .text(t.name)
+              .prop("selected", true)
+              .appendTo("#p-vendors");
           })
           .fail(function (x) {
             alert(
@@ -102,8 +107,28 @@
   function toggleStockInput() {
     $("#p-stock").prop("disabled", !$("#p-manage-stock").is(":checked"));
   }
-  //update initiate product list
 
+  function loadProductMeta() {
+    return $.ajax({
+      url: WCSSM.rest + "products/meta",
+      headers: { "X-WP-Nonce": WCSSM.nonce },
+      dataType: "json",
+    }).then(function (meta) {
+      const $cats = $("#p-categories").empty();
+      (meta.categories || []).forEach((c) =>
+        $("<option>").val(c.id).html(c.name).appendTo($cats)
+      );
+
+      const $vendors = $("#p-vendors").empty();
+      (meta.vendors || []).forEach((v) =>
+        $("<option>").val(v.id).text(v.name).appendTo($vendors)
+      );
+
+      return meta;
+    });
+  }
+
+  //update initiate product list
   window.initProductsList = function () {
     const $grid = $("#wcssm-products-grid");
     const $search = $("#p-search");
@@ -123,7 +148,10 @@
         <div>#${p.id}</div>
         <div>${(p.name || "").replace(/</g, "&lt;")}</div>
         <div>${(p.sku || "").replace(/</g, "&lt;")}</div>
-        <div>${(p.vendor || "").replace(/</g, "&lt;")}</div>
+        <div>${(p.vendor && p.vendor.name ? p.vendor.name : "").replace(
+          /</g,
+          "&lt;"
+        )}</div>
         <div>${p.price_html || p.price || ""}</div>
         <div class="actions">
           <a class="btn btn-sm" href="edit/${p.id}">Edit</a>
@@ -169,21 +197,6 @@
           load();
         }
       });
-
-      // delete
-      // $grid.find(".delete-product").on("click", function () {
-      //   const id = parseInt($(this).data("id"), 10);
-      //   if (!confirm("Delete product #" + id + "?")) return;
-      //   $.ajax({
-      //     url: WCSSM.rest + "products/" + id,
-      //     method: "DELETE",
-      //     headers: { "X-WP-Nonce": WCSSM.nonce },
-      //   })
-      //     .done(load)
-      //     .fail((x) =>
-      //       alert("Error: " + (x.responseJSON?.message || x.statusText))
-      //     );
-      // });
 
       // --- add near top of initProductsList() ---
 
@@ -267,82 +280,71 @@
     load();
   };
 
-  /* Create page */
-
-  function loadProductMeta() {
-    return $.ajax({
-      url: WCSSM.rest + "products/meta",
-      headers: { "X-WP-Nonce": WCSSM.nonce },
-    }).then(function (meta) {
-      const $cats = $("#p-categories").empty();
-      (meta.categories || []).forEach((c) =>
-        $("<option>").val(c.id).html(c.name).appendTo($cats)
-      );
-
-      // ADD ↓
-      const $vendors = $("#p-vendors").empty();
-      (meta.vendors || []).forEach((v) =>
-        $("<option>").val(v.id).text(v.name).appendTo($vendors)
-      );
-      // ADD ↑
-
-      return meta;
-    });
-  }
-
   // create product form js
   window.initProductCreate = function () {
     $("#create-actions").show();
-    $("#p-manage-stock").on("change", toggleStockInput);
-    toggleStockInput();
-    attachMediaPicker();
 
+    $("#p-manage-stock")
+      .off("change.wcssm")
+      .on("change.wcssm", toggleStockInput);
+    toggleStockInput();
+
+    attachMediaPicker();
+    bindNewVendorButton();
+
+    // ensure meta is loaded before enabling save
     loadProductMeta().then(function () {
       let busy = false;
-      $("#p-create").on("click", function () {
-        if (busy) return;
-        busy = true;
-        const payload = collectPayload();
-        if (!payload.name) {
-          $("#p-msg").text("Please enter product name.");
-          busy = false;
-          return;
-        }
-        if (!payload.price) {
-          $("#p-msg").text("Please enter product price.");
-          busy = false;
-          return;
-        }
 
-        $("#p-msg").text("Creating…");
-        $.ajax({
-          url: WCSSM.rest + "products",
-          method: "POST",
-          headers: {
-            "X-WP-Nonce": WCSSM.nonce,
-            "Content-Type": "application/json",
-          },
-          data: JSON.stringify(payload),
-        })
-          .done(function (p) {
-            $("#p-msg").text("Created #" + p.id + " — " + p.name);
-            window.location.href = "/manager/products";
+      $("#p-create")
+        .off("click.wcssm")
+        .on("click.wcssm", function () {
+          if (busy) return;
+          const $msg = $("#p-msg");
+          const payload = collectPayload();
+
+          if (!payload.name) {
+            $msg.text("Please enter product name.");
+            return;
+          }
+          if (!payload.price) {
+            $msg.text("Please enter product price.");
+            return;
+          }
+
+          busy = true;
+          $msg.text("Creating…");
+
+          $.ajax({
+            url: WCSSM.rest + "products",
+            method: "POST",
+            headers: {
+              "X-WP-Nonce": WCSSM.nonce,
+              "Content-Type": "application/json",
+            },
+            data: JSON.stringify(payload),
+            dataType: "json",
           })
-          .fail(function (x) {
-            $("#p-msg").text(
-              "Error: " + (x.responseJSON?.message || x.statusText)
-            );
-          })
-          .always(function () {
-            busy = false;
-          });
-      });
+            .done(function (p) {
+              $msg.text("Created #" + p.id + " — " + (p.name || ""));
+              // redirect to products list
+              setTimeout(function () {
+                window.location.href = managerBase() + "products";
+              }, 600);
+            })
+            .fail(function (x) {
+              $("#p-msg").text(
+                "Error: " + (x.responseJSON?.message || x.statusText)
+              );
+            })
+            .always(function () {
+              busy = false;
+            });
+        });
     });
-    bindNewVendorButton();
   };
 
-  /* Edit page */
-
+  /* Edit product form  page */
   window.initProductEdit = function (id) {
     const $msg = $("#p-msg");
 
@@ -358,6 +360,7 @@
       return $.ajax({
         url: WCSSM.rest + "products/" + id,
         headers: { "X-WP-Nonce": WCSSM.nonce },
+        dataType: "json",
       });
     }
 
@@ -371,8 +374,9 @@
       $("#p-manage-stock").prop("checked", !!p.manage_stock);
       $("#p-stock").val(p.stock || 0);
       $("#p-stock-status").val(p.stock_status || "instock");
+      toggleStockInput();
 
-      // Preselect categories
+      // Categories
       if (Array.isArray(p.category_ids)) {
         $("#p-categories option").each(function () {
           const v = parseInt($(this).val(), 10);
@@ -380,56 +384,55 @@
         });
       }
 
-      // Preselect vendors
-      if (Array.isArray(p.vendor_ids)) {
+      // Vendors (multi)
+      if (Array.isArray(p.vendor_id)) {
         $("#p-vendors option").each(function () {
           const v = parseInt($(this).val(), 10);
-          $(this).prop("selected", p.vendor_ids.includes(v));
+          $(this).prop("selected", p.vendor_id.includes(v));
         });
       }
 
-      // Images: set hidden field + render thumbs via wp.media (to get URLs)
+      // Images: set hidden field + render thumbs via wp.media attachment fetch
       const ids = Array.isArray(p.images)
         ? p.images.map(Number).filter(Boolean)
         : [];
       $("#p-images-ids").val(ids.join(","));
-      $("#p-images-preview").empty();
+      const $prev = $("#p-images-preview").empty();
 
-      // Fetch each attachment for preview
       if (window.wp && wp.media && ids.length) {
         ids.forEach(function (attId) {
           const att = wp.media.attachment(attId);
           att.fetch().then(function () {
-            const url = att.get("url");
-            if (url) $("#p-images-preview").append('<img src="' + url + '" />');
+            const url =
+              att.get("sizes")?.thumbnail?.url || att.get("url") || null;
+            if (url) $prev.append('<img src="' + url + '" alt="">');
           });
         });
       }
     }
 
-    function load() {
-      // 1) Load meta (cats/vendors), 2) fetch product, then prefill
-      $.when(loadProductMeta(), fetchProduct())
-        .done(function (_, prodRes) {
-          const p = (Array.isArray(prodRes) ? prodRes[0] : prodRes) || prodRes;
-          prefillForm(p);
-        })
-        .fail(function (x) {
-          toast(
-            "Failed to load product: " +
-              (x.responseJSON?.message || x.statusText),
-            false
-          );
-        });
-    }
+    // Load meta first, then product, to avoid race
+    $.when(loadProductMeta(), fetchProduct())
+      .done(function (_meta, prodRes) {
+        // $.when returns arrays; prodRes[0] is the payload
+        const p = Array.isArray(prodRes) ? prodRes[0] : prodRes;
+        prefillForm(p);
+      })
+      .fail(function (x) {
+        toast(
+          "Failed to load product: " +
+            (x.responseJSON?.message || x.statusText),
+          false
+        );
+      });
 
-    // Save handler (PUT)
+    // Save
     $("#p-save")
-      .off("click")
-      .on("click", function (e) {
+      .off("click.wcssm")
+      .on("click.wcssm", function (e) {
         e.preventDefault();
         toast("Saving…", true);
-        const payload = collectPayload(); // reuses your existing function
+        const payload = collectPayload();
 
         $.ajax({
           url: WCSSM.rest + "products/" + id,
@@ -439,45 +442,229 @@
             "Content-Type": "application/json",
           },
           data: JSON.stringify(payload),
+          dataType: "json",
         })
           .done(function () {
             toast("✅ Saved!", true);
             setTimeout(function () {
-              window.location = (WCSSM.home || "/manager/") + "products";
-            }, 900);
+              window.location.href = managerBase() + "products";
+            }, 700);
           })
           .fail(function (x) {
             toast("Error: " + (x.responseJSON?.message || x.statusText), false);
           });
       });
 
-    // Image picker (same binding as create)
-    $("#p-pick-images")
-      .off("click")
-      .on("click", function () {
-        const frame = wp.media({
-          title: "Select product images",
-          multiple: true,
-          library: { type: "image" },
-        });
-        frame.on("select", function () {
-          const ids = [];
-          const thumbs = [];
-          frame
-            .state()
-            .get("selection")
-            .each(function (att) {
-              ids.push(att.get("id"));
-              thumbs.push('<img src="' + att.get("url") + '" />');
-            });
-          $("#p-images-ids").val(ids.join(","));
-          $("#p-images-preview").html(thumbs.join(""));
-        });
-        frame.open();
-      });
+    // Media picker + vendor quick-add
+    attachMediaPicker();
+    bindNewVendorButton();
 
-    load();
+    // Stock toggle
+    $("#p-manage-stock")
+      .off("change.wcssm")
+      .on("change.wcssm", toggleStockInput);
   };
+})(jQuery);
+
+/* create new vendor popup */
+
+// ===== Vendor modal (Create-from-Product) =====
+/*
+(function ($) {
+  function vendorToast(msg, ok) {
+    $("#vendor-msg")
+      .removeClass("ok err")
+      .addClass(ok ? "ok" : "err")
+      .text(msg || "")
+      .show();
+  }
+
+  function openVendorModal() {
+    $("#vendor-msg").text("");
+    $("#v-name, #v-email, #v-phone, #v-address").val("");
+    $("#vendor-modal").prop("hidden", false);
+    $("#v-name").trigger("focus");
+  }
+  function closeVendorModal() {
+    $("#vendor-modal").prop("hidden", true);
+  }
+
+  // Wire buttons when the page has the vendor UI
+  $(document).on("click", "#open-vendor-modal", function () {
+    openVendorModal();
+  });
+  $(document).on("click", "#vendor-modal-close", function () {
+    closeVendorModal();
+  });
+  // click backdrop to close
+  $(document).on("click", ".wcssm-modal__backdrop", function () {
+    closeVendorModal();
+  });
+
+  // Save vendor → POST /vendors → add option to #p-vendors and select it
+  $(document).on("click", "#vendor-save", function () {
+    var name = ($("#v-name").val() || "").trim();
+    var email = ($("#v-email").val() || "").trim();
+    var phone = ($("#v-phone").val() || "").trim();
+    var address = ($("#v-address").val() || "").trim();
+
+    if (!name) {
+      vendorToast("Vendor name is required", false);
+      return;
+    }
+    vendorToast("Saving…", true);
+
+    $.ajax({
+      url: (WCSSM.rest || "/wp-json/wcss/v1/") + "vendors",
+      method: "POST",
+      headers: {
+        "X-WP-Nonce": WCSSM.nonce,
+        "Content-Type": "application/json",
+      },
+      data: JSON.stringify({
+        name: name,
+        email: email,
+        phone: phone,
+        address: address,
+      }),
+      dataType: "json",
+    })
+      .done(function (v) {
+        // Expect { id, name, ... } back
+        if (!v || !v.id) {
+          vendorToast("Unexpected response from server.", false);
+          return;
+        }
+        // add & select in the multi-select
+        var $sel = $("#p-vendors");
+        if ($sel.find('option[value="' + v.id + '"]').length === 0) {
+          $("<option>").val(v.id).text(v.name).appendTo($sel);
+        }
+        $sel.find('option[value="' + v.id + '"]').prop("selected", true);
+
+        vendorToast("Vendor created.", true);
+        setTimeout(closeVendorModal, 400);
+      })
+      .fail(function (x) {
+        vendorToast(
+          x.responseJSON && x.responseJSON.message
+            ? x.responseJSON.message
+            : "Failed to create vendor",
+          false
+        );
+      });
+  });
+})(jQuery);
+
+*/
+
+(function ($) {
+  function vendorToast(msg, ok) {
+    $("#vendor-msg")
+      .removeClass("ok err")
+      .addClass(ok ? "ok" : "err")
+      .text(msg || "")
+      .show();
+  }
+
+  function openVendorModal() {
+    $("#vendor-msg").text("");
+    $("#v-name, #v-email, #v-phone, #v-address").val("");
+    $("#vendor-modal").prop("hidden", false);
+    $("#v-name").trigger("focus");
+  }
+  function closeVendorModal() {
+    $("#vendor-modal").prop("hidden", true);
+  }
+
+  // Modal open/close bindings
+  $(document).on("click", "#open-vendor-modal", openVendorModal);
+  $(document).on(
+    "click",
+    "#vendor-modal-close, .wcssm-modal__backdrop",
+    closeVendorModal
+  );
+
+  // === Save vendor ===
+  $(document).on("click", "#vendor-save", function () {
+    const name = ($("#v-name").val() || "").trim();
+    const email = ($("#v-email").val() || "").trim();
+    const phone = ($("#v-phone").val() || "").trim();
+    const address = ($("#v-address").val() || "").trim();
+
+    // Basic regex patterns
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneRegex = /^[0-9+\-\s]{7,15}$/;
+
+    // === Validations ===
+    if (!name) {
+      vendorToast("Vendor name is required", false);
+      $("#v-name").focus();
+      return;
+    }
+    if (!email) {
+      vendorToast("Email is required", false);
+      $("#v-email").focus();
+      return;
+    }
+    if (!emailRegex.test(email)) {
+      vendorToast("Please enter a valid email address", false);
+      $("#v-email").focus();
+      return;
+    }
+    if (!phone) {
+      vendorToast("Phone number is required", false);
+      $("#v-phone").focus();
+      return;
+    }
+    if (!phoneRegex.test(phone)) {
+      vendorToast("Please enter a valid phone number", false);
+      $("#v-phone").focus();
+      return;
+    }
+
+    // Save
+    vendorToast("Saving…", true);
+
+    $.ajax({
+      url: (WCSSM.rest || "/wp-json/wcss/v1/") + "vendors",
+      method: "POST",
+      headers: {
+        "X-WP-Nonce": WCSSM.nonce,
+        "Content-Type": "application/json",
+      },
+      data: JSON.stringify({
+        name: name,
+        email: email,
+        phone: phone,
+        address: address,
+      }),
+      dataType: "json",
+    })
+      .done(function (v) {
+        if (!v || !v.id) {
+          vendorToast("Unexpected response from server.", false);
+          return;
+        }
+
+        const $sel = $("#p-vendors");
+        if ($sel.find(`option[value='${v.id}']`).length === 0) {
+          $("<option>").val(v.id).text(v.name).appendTo($sel);
+        }
+        $sel.find(`option[value='${v.id}']`).prop("selected", true);
+
+        vendorToast("Vendor created successfully!", true);
+        setTimeout(closeVendorModal, 600);
+      })
+      .fail(function (x) {
+        vendorToast(
+          x.responseJSON && x.responseJSON.message
+            ? x.responseJSON.message
+            : "Failed to create vendor",
+          false
+        );
+      });
+  });
 })(jQuery);
 
 /* store curd below */
@@ -513,7 +700,7 @@
         <div>${s.quota ?? 0}</div>
         <div>${(s.budget ?? 0).toLocaleString()}</div>
         <div>
-          <a class="btn btn-sm" href="${WCSSM.home}stores/edit/${s.id}">Edit</a>
+          <a class="btn btn-sm" href="edit/${s.id}">Edit</a>
           <button class="btn btn-sm btn-danger st-del" data-id="${
             s.id
           }">Delete</button>
@@ -1015,258 +1202,241 @@
 
     load();
   };
-})(jQuery);
 
-window.initOrderView = function initOrderView(orderId) {
-  var $wrap = jQuery("#order-detail");
-  $wrap.html("<p>Loading...</p>");
+  window.initOrderView = function initOrderView(orderId) {
+    var $wrap = jQuery("#order-detail");
+    $wrap.html("<p>Loading...</p>");
 
-  fetch((WCSSM.rest || "/wp-json/wcss/v1/") + "orders/" + orderId, {
-    headers: { "X-WP-Nonce": WCSSM.nonce },
-  })
-    .then(function (r) {
-      return r.json();
+    fetch((WCSSM.rest || "/wp-json/wcss/v1/") + "orders/" + orderId, {
+      headers: { "X-WP-Nonce": WCSSM.nonce },
     })
-    .then(function (data) {
-      if (data && data.code) {
-        $wrap.html(
-          "<div class='flash-error'>Error: " +
-            (data.message || "Failed") +
-            "</div>"
-        );
-        return;
-      }
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        if (data && data.code) {
+          $wrap.html(
+            "<div class='flash-error'>Error: " +
+              (data.message || "Failed") +
+              "</div>"
+          );
+          return;
+        }
 
-      // ledger + store blocks (optional UI, shown only if present)
-      var ledgerBlock = "";
-      if (data && data.ledger) {
-        var l = data.ledger;
-        var fmt = function (n) {
-          try {
-            return new Intl.NumberFormat(undefined, {
-              style: "currency",
-              currency: l.currency,
-            }).format(+n || 0);
-          } catch (e) {
-            return (l.currency || "") + " " + (n || 0);
-          }
-        };
-        ledgerBlock =
-          "<h3>Monthly Usage</h3>" +
-          "<div class='ov-ledger'>" +
-          "<p><strong>Month:</strong> " +
-          (l.month || "") +
+        // ledger + store blocks (optional UI, shown only if present)
+        var ledgerBlock = "";
+        if (data && data.ledger) {
+          var l = data.ledger;
+          var fmt = function (n) {
+            try {
+              return new Intl.NumberFormat(undefined, {
+                style: "currency",
+                currency: l.currency,
+              }).format(+n || 0);
+            } catch (e) {
+              return (l.currency || "") + " " + (n || 0);
+            }
+          };
+          ledgerBlock =
+            "<h3>Monthly Usage</h3>" +
+            "<div class='ov-ledger'>" +
+            "<p><strong>Month:</strong> " +
+            (l.month || "") +
+            "</p>" +
+            "<p><strong>Orders:</strong> " +
+            (l.used_orders || 0) +
+            " / " +
+            (l.quota || "∞") +
+            "</p>" +
+            "<p><strong>Spend:</strong> " +
+            fmt(l.used_amount || 0) +
+            " / " +
+            (l.budget ? fmt(l.budget) : "∞") +
+            "</p>" +
+            "<p><strong>Remaining Orders:</strong> " +
+            (l.quota ? Math.max(0, l.quota - (l.used_orders || 0)) : "∞") +
+            "</p>" +
+            "<p><strong>Remaining Budget:</strong> " +
+            (l.budget
+              ? fmt(Math.max(0, (l.budget || 0) - (l.used_amount || 0)))
+              : "∞") +
+            "</p>" +
+            "</div>";
+        }
+
+        var storeLine = "";
+        if (data && data.store && (data.store.name || data.store.id)) {
+          storeLine =
+            "<p><strong>Store:</strong> " +
+            (data.store.name || "#" + data.store.id) +
+            "</p>";
+        }
+
+        var html =
+          "<div class='order-meta'>" +
+          "<h2>Order #" +
+          (data.number || orderId) +
+          "</h2>" +
+          "<p><strong>Date:</strong> " +
+          (data.date || "") +
           "</p>" +
-          "<p><strong>Orders:</strong> " +
-          (l.used_orders || 0) +
-          " / " +
-          (l.quota || "∞") +
+          "<p><strong>Status:</strong> " +
+          (data.status || "") +
           "</p>" +
-          "<p><strong>Spend:</strong> " +
-          fmt(l.used_amount || 0) +
-          " / " +
-          (l.budget ? fmt(l.budget) : "∞") +
+          "<p><strong>Total:</strong> " +
+          (data.total_html || data.total || "") +
           "</p>" +
-          "<p><strong>Remaining Orders:</strong> " +
-          (l.quota ? Math.max(0, l.quota - (l.used_orders || 0)) : "∞") +
+          "<p><strong>Customer:</strong> " +
+          (data.customer || "") +
           "</p>" +
-          "<p><strong>Remaining Budget:</strong> " +
-          (l.budget
-            ? fmt(Math.max(0, (l.budget || 0) - (l.used_amount || 0)))
-            : "∞") +
-          "</p>" +
-          "</div>";
-      }
+          storeLine +
+          "</div>" +
+          "<h3>Items</h3>" +
+          "<table class='table'>" +
+          "<thead><tr><th>Product</th><th>SKU</th><th>Qty</th><th>Total</th></tr></thead>" +
+          "<tbody>" +
+          (Array.isArray(data.items)
+            ? data.items
+                .map(function (i) {
+                  return (
+                    "<tr>" +
+                    "<td>" +
+                    (i.name || "") +
+                    "</td>" +
+                    "<td>" +
+                    (i.sku
+                      ? "<br><span class='muted sku'>SKU: " + i.sku + "</span>"
+                      : "") +
+                    "</td>" +
+                    "<td>" +
+                    (i.qty || 0) +
+                    "</td>" +
+                    "<td>" +
+                    (i.total || "") +
+                    "</td>" +
+                    "</tr>"
+                  );
+                })
+                .join("")
+            : "<tr><td colspan='3'>No items</td></tr>") +
+          "</tbody>" +
+          "</table>" +
+          ledgerBlock +
+          "<h3>Update Status</h3>" +
+          "<div class='actions'>" +
+          "<button class='btn btn-success' id='order-approve'>Approve</button> " +
+          "<button class='btn btn-danger' id='order-reject'>Reject</button>" +
+          "</div>" +
+          "<div id='order-msg'></div>";
 
-      var storeLine = "";
-      if (data && data.store && (data.store.name || data.store.id)) {
-        storeLine =
-          "<p><strong>Store:</strong> " +
-          (data.store.name || "#" + data.store.id) +
-          "</p>";
-      }
+        $wrap.html(html);
 
-      var html =
-        "<div class='order-meta'>" +
-        "<h2>Order #" +
-        (data.number || orderId) +
-        "</h2>" +
-        "<p><strong>Date:</strong> " +
-        (data.date || "") +
-        "</p>" +
-        "<p><strong>Status:</strong> " +
-        (data.status || "") +
-        "</p>" +
-        "<p><strong>Total:</strong> " +
-        (data.total_html || data.total || "") +
-        "</p>" +
-        "<p><strong>Customer:</strong> " +
-        (data.customer || "") +
-        "</p>" +
-        storeLine +
-        "</div>" +
-        "<h3>Items</h3>" +
-        "<table class='table'>" +
-        "<thead><tr><th>Product</th><th>SKU</th><th>Qty</th><th>Total</th></tr></thead>" +
-        "<tbody>" +
-        (Array.isArray(data.items)
-          ? data.items
-              .map(function (i) {
-                return (
-                  "<tr>" +
-                  "<td>" +
-                  (i.name || "") +
-                  "</td>" +
-                  "<td>" +
-                  (i.sku
-                    ? "<br><span class='muted sku'>SKU: " + i.sku + "</span>"
-                    : "") +
-                  "</td>" +
-                  "<td>" +
-                  (i.qty || 0) +
-                  "</td>" +
-                  "<td>" +
-                  (i.total || "") +
-                  "</td>" +
-                  "</tr>"
-                );
-              })
-              .join("")
-          : "<tr><td colspan='3'>No items</td></tr>") +
-        "</tbody>" +
-        "</table>" +
-        ledgerBlock +
-        "<h3>Update Status</h3>" +
-        "<div class='actions'>" +
-        "<button class='btn btn-success' id='order-approve'>Approve</button> " +
-        "<button class='btn btn-danger' id='order-reject'>Reject</button>" +
-        "</div>" +
-        "<div id='order-msg'></div>";
+        jQuery("#order-approve").on("click", function () {
+          updateStatus("approved");
+        });
+        jQuery("#order-reject").on("click", function () {
+          updateStatus("rejected");
+        });
 
-      $wrap.html(html);
+        function updateStatus(newStatus, opts) {
+          opts = opts || {};
+          var payload = { status: newStatus };
+          if (opts.override) payload.override = 1;
+          if (opts.note) payload.note = opts.note;
 
-      jQuery("#order-approve").on("click", function () {
-        updateStatus("approved");
-      });
-      jQuery("#order-reject").on("click", function () {
-        updateStatus("rejected");
-      });
-
-      function updateStatus(newStatus, opts) {
-        opts = opts || {};
-        var payload = { status: newStatus };
-        if (opts.override) payload.override = 1;
-        if (opts.note) payload.note = opts.note;
-
-        fetch(
-          (WCSSM.rest || "/wp-json/wcss/v1/") + "orders/" + orderId + "/status",
-          {
-            method: "POST",
-            headers: {
-              "X-WP-Nonce": WCSSM.nonce,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(payload),
-          }
-        )
-          .then(function (r) {
-            // Handle 409 (limit exceeded) specially
-            if (r.status === 409)
-              return r.json().then(function (j) {
-                j.__status = 409;
-                return j;
-              });
-            return r.json();
-          })
-          .then(function (res) {
-            // Limit exceeded → show confirm with details, allow override
-            if (res && res.__status === 409 && res.data) {
-              var d = res.data;
-              var money = function (n) {
-                try {
-                  return new Intl.NumberFormat(undefined, {
-                    style: "currency",
-                    currency: d.currency,
-                  }).format(+n || 0);
-                } catch (e) {
-                  return (d.currency || "") + " " + (n || 0);
+          fetch(
+            (WCSSM.rest || "/wp-json/wcss/v1/") +
+              "orders/" +
+              orderId +
+              "/status",
+            {
+              method: "POST",
+              headers: {
+                "X-WP-Nonce": WCSSM.nonce,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(payload),
+            }
+          )
+            .then(function (r) {
+              // Handle 409 (limit exceeded) specially
+              if (r.status === 409)
+                return r.json().then(function (j) {
+                  j.__status = 409;
+                  return j;
+                });
+              return r.json();
+            })
+            .then(function (res) {
+              // Limit exceeded → show confirm with details, allow override
+              if (res && res.__status === 409 && res.data) {
+                var d = res.data;
+                var money = function (n) {
+                  try {
+                    return new Intl.NumberFormat(undefined, {
+                      style: "currency",
+                      currency: d.currency,
+                    }).format(+n || 0);
+                  } catch (e) {
+                    return (d.currency || "") + " " + (n || 0);
+                  }
+                };
+                var msg = "Approving this order exceeds the store limits:\n";
+                if (d.quota)
+                  msg += "• Orders: " + d.will_orders + " / " + d.quota + "\n";
+                if (d.budget)
+                  msg +=
+                    "• Spend: " +
+                    money(d.will_spend) +
+                    " / " +
+                    money(d.budget) +
+                    "\n";
+                msg += "\nProceed anyway?";
+                if (window.confirm(msg)) {
+                  var note = window.prompt(
+                    "Add a note (optional):",
+                    "Approved with override"
+                  );
+                  updateStatus("approved", {
+                    override: true,
+                    note: note || "",
+                  });
+                } else {
+                  jQuery("#order-msg").html(
+                    "<div class='flash-error'>Approval cancelled.</div>"
+                  );
                 }
-              };
-              var msg = "Approving this order exceeds the store limits:\n";
-              if (d.quota)
-                msg += "• Orders: " + d.will_orders + " / " + d.quota + "\n";
-              if (d.budget)
-                msg +=
-                  "• Spend: " +
-                  money(d.will_spend) +
-                  " / " +
-                  money(d.budget) +
-                  "\n";
-              msg += "\nProceed anyway?";
-              if (window.confirm(msg)) {
-                var note = window.prompt(
-                  "Add a note (optional):",
-                  "Approved with override"
+                return;
+              }
+
+              if (res && res.ok) {
+                jQuery("#order-msg").html(
+                  "<div class='flash-success'>Status updated to " +
+                    newStatus +
+                    "!</div>"
                 );
-                updateStatus("approved", { override: true, note: note || "" });
+                // go back to orders list after a short pause
+                setTimeout(function () {
+                  window.location.href =
+                    (WCSSM.manager_base || "/manager/") + "orders";
+                }, 500);
               } else {
                 jQuery("#order-msg").html(
-                  "<div class='flash-error'>Approval cancelled.</div>"
+                  "<div class='flash-error'>" +
+                    (res && res.message ? res.message : "Failed") +
+                    "</div>"
                 );
               }
-              return;
-            }
-
-            if (res && res.ok) {
+            })
+            .catch(function (e) {
               jQuery("#order-msg").html(
-                "<div class='flash-success'>Status updated to " +
-                  newStatus +
-                  "!</div>"
+                "<div class='flash-error'>Request failed</div>"
               );
-              // go back to orders list after a short pause
-              setTimeout(function () {
-                window.location.href =
-                  (WCSSM.manager_base || "/manager/") + "orders";
-              }, 500);
-            } else {
-              jQuery("#order-msg").html(
-                "<div class='flash-error'>" +
-                  (res && res.message ? res.message : "Failed") +
-                  "</div>"
-              );
-            }
-          })
-          .catch(function (e) {
-            jQuery("#order-msg").html(
-              "<div class='flash-error'>Request failed</div>"
-            );
-          });
-      }
-    })
-    .catch(function () {
-      $wrap.html("<div class='flash-error'>Failed to load order.</div>");
-    });
-};
-
-// Global bootstrap for page-specific initializers
-// jQuery(function ($) {
-//   if (!window.WCSSM) return;
-//   console.log("initiator....");
-//   // Orders → view
-//   if (WCSSM.view === "orders" && WCSSM.action === "view" && WCSSM.id) {
-//     if (typeof window.initOrderView === "function") {
-//       window.initOrderView(WCSSM.id);
-//       console.log("initiator.... if");
-//     } else {
-//       console.log("initiator.... else");
-//       // In case scripts are still settling, try once more shortly
-//       setTimeout(function () {
-//         if (typeof window.initOrderView === "function") {
-//           window.initOrderView(WCSSM.id);
-//         }
-//       }, 50);
-//     }
-//   }
-
-//   // (You can keep similar bootstraps for products/stores, etc.)
-// });
+            });
+        }
+      })
+      .catch(function () {
+        $wrap.html("<div class='flash-error'>Failed to load order.</div>");
+      });
+  };
+})(jQuery);

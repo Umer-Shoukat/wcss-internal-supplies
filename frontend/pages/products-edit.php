@@ -49,10 +49,18 @@
         <label>Categories</label>
         <select id="p-categories" class="input" multiple size="6" style="min-width:280px"></select>
       </div>
-      <div>
+      <!-- <div>
         <label>Vendors</label>
         <select id="p-vendors" class="input" multiple size="6" style="min-width:280px"></select>
+      </div> -->
+      <div>
+        <label>Vendors</label>
+        <div class="inline-flex gap-8">
+          <select id="p-vendors" class="input" multiple size="6" style="min-width:280px"></select>
+          <button type="button" class="btn btn-light" id="open-vendor-modal">+ New vendor</button>
+        </div>
       </div>
+
     </div>
 
     <div>
@@ -93,6 +101,45 @@
   </form>
 </div>
 
+
+
+<div id="vendor-modal" class="wcssm-modal" hidden>
+  <div class="wcssm-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="vendor-modal-title">
+    <button type="button" class="wcssm-modal__close" id="vendor-modal-close" aria-label="Close">×</button>
+    <h3 id="vendor-modal-title">Create Vendor</h3>
+
+    <div class="grid-2">
+      <div>
+        <label>Vendor name *</label>
+        <input id="v-name" class="input" required>
+      </div>
+      <div>
+        <label>Email</label>
+        <input id="v-email" class="input" type="email" placeholder="name@example.com">
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div>
+        <label>Phone</label>
+        <input id="v-phone" class="input" placeholder="+1 555 123 4567">
+      </div>
+      <div>
+        <label>Address</label>
+        <input id="v-address" class="input" placeholder="Street, City, State">
+      </div>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="btn btn-primary" id="vendor-save">Save vendor</button>
+      <span id="vendor-msg" class="muted"></span>
+    </div>
+  </div>
+  <div class="wcssm-modal__backdrop"></div>
+</div>
+
+
+
 <script>
   
 jQuery(function($){
@@ -100,5 +147,7 @@ jQuery(function($){
     if (typeof window.initProductEdit === 'function') window.initProductEdit(WCSSM.id);
   }
 });
-console.log(WCSSM);
+
 </script>
+
+

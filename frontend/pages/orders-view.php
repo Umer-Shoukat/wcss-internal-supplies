@@ -23,6 +23,7 @@
 
 
 
+
 <script>
 jQuery(function($){
   if (window.WCSSM && WCSSM.view==='orders' && WCSSM.action==='view' && WCSSM.id) {
@@ -48,4 +49,20 @@ jQuery(function($){
   font-size: 12px;
   color: #888;
 }
+
+.meta-cards .card .label { font-size: 12px; color: #6b7280; }
+.meta-cards .card .value { font-weight: 600; margin-top: 2px; }
+.metrics .card { padding: 12px; border: 1px solid #eee; border-radius: 10px; }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+.badge-success { background: #E6F7EC; color: #1E7F3E; }
+.badge-danger  { background: #FDECEC; color: #B91C1C; }
+.badge-warn    { background: #FEF7E6; color: #92400E; }
+.badge-info    { background: #E6F2FE; color: #1D4ED8; }
+.badge-muted   { background: #F3F4F6; color: #6B7280; }
+
+.table .sku { font-size: 12px; color: #888; }
+.ta-r { text-align: right; }
+
+
 </style>

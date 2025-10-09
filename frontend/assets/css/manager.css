@@ -1243,3 +1243,47 @@ body.admin-bar {
   font-size: 13px;
   color: #666;
 }
+
+/* vendor modle create new */
+
+/* Modal */
+.wcssm-modal[hidden] {
+  display: none;
+}
+.wcssm-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
+.wcssm-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+}
+.wcssm-modal__dialog {
+  position: relative;
+  z-index: 1;
+  max-width: 640px;
+  margin: 6vh auto;
+  padding: 20px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+}
+.wcssm-modal__close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: transparent;
+  border: 0;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.inline-flex {
+  display: inline-flex;
+  align-items: center;
+}
+.gap-8 {
+  gap: 8px;
+}

@@ -22,7 +22,7 @@ define( 'WCSS_URL', plugin_dir_url( __FILE__ ) );
  * Includes (minimal at this stage)
  * --------------------------------------------------------------- */
 
- require_once WCSS_DIR . 'includes/class-status-policy.php';
+require_once WCSS_DIR . 'includes/class-status-policy.php';
 require_once WCSS_DIR . 'includes/class-activator.php';
 require_once WCSS_DIR . 'includes/class-admin-settings.php';
 require_once WCSS_DIR . 'includes/class-store-cpt.php';
@@ -49,6 +49,8 @@ require_once WCSS_DIR . 'includes/class-wcss-ledger.php';
 require_once WCSS_DIR . 'includes/rest/class-rest-ledger.php';
 
 require_once WCSS_DIR . 'includes/class-wcss-vendors.php';
+require_once WCSS_DIR . 'includes/rest/class-rest-vendors.php';
+
 
 
 /** ----------------------------------------------------------------
@@ -184,6 +186,7 @@ add_action( 'wcss_bootstrap', function () {
     new WCSS_REST_Stores();
     new WCSS_REST_Ledger();
     new WCSS_Vendors();
+    new WCSS_REST_Vendors();
 
 } );
 
@@ -329,3 +332,21 @@ add_action('woocommerce_checkout_create_order', function( $order, $data ){
         $order->update_meta_data( '_wcss_store_id', $store_id );
     }
 }, 10, 2);
+
+
+
+add_action( 'admin_init', function(){
+    if ( ! current_user_can('manage_options') ) return;
+    if ( get_option('wcss_vendor_meta_backfilled') ) return;
+
+    $terms = get_terms([ 'taxonomy'=>'wcss_vendor', 'hide_empty'=>false ]);
+    if ( is_wp_error($terms) ) return;
+    foreach ( $terms as $t ) {
+        foreach ( [ 'wcss_vendor_phone','wcss_vendor_email','wcss_vendor_address' ] as $k ) {
+            if ( '' === get_term_meta( $t->term_id, $k, true ) ) {
+                update_term_meta( $t->term_id, $k, '' );
+            }
+        }
+    }
+    update_option('wcss_vendor_meta_backfilled', 1);
+});

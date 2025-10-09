@@ -181,11 +181,27 @@ class WCSS_REST_Products {
         $brand_terms   = wp_get_post_terms( $p->get_id(), 'wcss_brand',  [ 'fields' => 'names' ] );
         if ( is_wp_error( $brand_terms ) )   $brand_terms = [];
     
-        $vendor_terms  = wp_get_post_terms( $p->get_id(), 'wcss_vendor', [ 'fields' => 'names' ] );
-        if ( is_wp_error( $vendor_terms ) )  $vendor_terms = [];
+        // $vendor_terms  = wp_get_post_terms( $p->get_id(), 'wcss_vendor', [ 'fields' => 'names' ] );
+        // if ( is_wp_error( $vendor_terms ) )  $vendor_terms = [];
     
         $vendor_ids    = wp_get_post_terms( $p->get_id(), 'wcss_vendor', [ 'fields' => 'ids' ] );
         if ( is_wp_error( $vendor_ids ) )    $vendor_ids = [];
+
+
+        $vendor_terms = wp_get_post_terms( $p->get_id(), 'wcss_vendor', [ 'fields' => 'all' ] );
+        if ( is_wp_error( $vendor_terms ) ) { $vendor_terms = []; }
+        $vendor = null;
+        if ( ! empty( $vendor_terms ) && $vendor_terms[0] instanceof WP_Term ) {
+            $vt = $vendor_terms[0];
+            $vendor = [
+                'id'      => (int) $vt->term_id,
+                'name'    => $vt->name,
+                'phone'   => (string) get_term_meta( $vt->term_id, 'wcss_vendor_phone', true ),
+                'email'   => (string) get_term_meta( $vt->term_id, 'wcss_vendor_email', true ),
+                'address' => (string) get_term_meta( $vt->term_id, 'wcss_vendor_address', true ),
+            ];
+        }
+
     
         $cat_ids       = wp_get_post_terms( $p->get_id(), 'product_cat', [ 'fields' => 'ids' ] );
         if ( is_wp_error( $cat_ids ) )       $cat_ids = [];
@@ -207,8 +223,8 @@ class WCSS_REST_Products {
             'status'            => $p->get_status(),
             'category_ids'      => $cat_ids,
             'brand'             => $brand_terms  ? $brand_terms[0]  : '',
-            'vendor'            => $vendor_terms ? $vendor_terms[0] : '',
-            'vendor_ids'        => array_map('intval',$vendor_ids),
+            'vendor'            => $vendor,
+            'vendor_id'         =>$vendor_ids,
             'images'            => $images,
         ];
     }
@@ -406,6 +422,7 @@ class WCSS_REST_Products {
             'nonce' => wp_create_nonce( 'wp_rest' ),
         ]);
     }
+
     public function create_category( WP_REST_Request $req ) {
         $name   = trim( (string) $req->get_param('name') );
         $parent = (int) $req->get_param('parent');
@@ -425,6 +442,7 @@ class WCSS_REST_Products {
         $t = get_term( (int) $res['term_id'] );
         return rest_ensure_response([ 'id'=>(int)$t->term_id, 'name'=>$t->name, 'parent'=>(int)$t->parent ]);
     }
+
     public function create_vendor( WP_REST_Request $req ) {
         $name = trim( (string) $req->get_param('name') );
         if ( $name === '' ) return new WP_Error('wcss_bad_name', 'Vendor name required', [ 'status'=>400 ]);

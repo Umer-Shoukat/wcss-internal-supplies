@@ -29,11 +29,13 @@
     </div> -->
 
     <div class="row">
+    <div>
       <label>Vendors</label>
-      <div style="display:flex; gap:8px; align-items:flex-start;">
+      <div class="inline-flex gap-8">
         <select id="p-vendors" class="input" multiple size="6" style="min-width:280px"></select>
-        <button type="button" class="btn btn-light" id="p-add-vendor">+ New Vendor</button>
+        <button type="button" class="btn btn-light" id="open-vendor-modal">+ New vendor</button>
       </div>
+    </div>
       <small class="ksub">Hold Ctrl/Cmd to select multiple.</small>
     </div>
 

@@ -1,4 +1,5 @@
 <?php
+
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 class WCSS_Route_Manager {
@@ -89,26 +90,16 @@ class WCSS_Route_Manager {
             wp_enqueue_media();
         }
     
-        // wp_localize_script( 'wcss-manager', 'WCSSM', [
-        //     'rest'  => esc_url_raw( rest_url( 'wcss/v1/' ) ),
-        //     'nonce' => wp_create_nonce( 'wp_rest' ),
-        //     'home'  => home_url('/manager/'),
-        //     'view'  => get_query_var('wcss'),
-        //     'action'=> get_query_var('wcss_action'),
-        //     'id'    => absint( get_query_var('wcss_id') ),
-        // ]);
-
         wp_localize_script( 'wcss-manager', 'WCSSM', [
+
             'rest'         => esc_url_raw( rest_url( 'wcss/v1/' ) ),
             'nonce'        => wp_create_nonce( 'wp_rest' ),
-    
-            // routing context for page-specific initializers
             'view'         => (string) get_query_var( 'wcss' ),
             'action'       => (string) get_query_var( 'wcss_action' ),
             'id'           => absint( get_query_var( 'wcss_id' ) ),
-    
             // convenience for building links from JS
             'manager_base' => trailingslashit( home_url( '/manager' ) ),
+
         ]);
         
 

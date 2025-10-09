@@ -47,6 +47,32 @@ class WCSS_REST_Orders {
             ],
         ] );
 
+
+        register_rest_route( self::NS, '/orders/(?P<id>\d+)/shipment', [
+            'methods'             => 'POST',
+            'permission_callback' => [ $this, 'can_manage' ],
+            'callback'            => [ $this, 'orders_update_shipment' ],
+            'args'                => [
+                'tracking' => [ 'required' => false, 'sanitize_callback' => 'sanitize_text_field' ],
+                'carrier'  => [ 'required' => false, 'sanitize_callback' => 'sanitize_text_field' ],
+                'edd'      => [ 'required' => false, 'sanitize_callback' => 'sanitize_text_field' ], // YYYY-MM-DD
+            ],
+        ]);
+
+        register_rest_route( self::NS, '/orders/(?P<id>\d+)/receiving', [
+            'methods'             => 'POST',
+            'permission_callback' => [ $this, 'can_manage' ],
+            'callback'            => [ $this, 'orders_update_receiving' ],
+            'args'                => [
+                'received'       => [ 'required' => true ],
+                'received_date'  => [ 'required' => false, 'sanitize_callback' => 'sanitize_text_field' ], // YYYY-MM-DD
+                'notes'          => [ 'required' => false, 'sanitize_callback' => 'sanitize_textarea_field' ],
+                'issues'         => [ 'required' => false ], // array: [{sku, type: "damage|shortage", qty, note}]
+            ],
+        ]);
+
+
+
         register_rest_route( self::NS, '/orders/(?P<id>\d+)', [
             'methods'=>'GET', 'permission_callback'=>[ $this,'can_manage' ],
             'callback'=>[ $this,'orders_read' ],
@@ -312,6 +338,14 @@ class WCSS_REST_Orders {
                     }
                 }
             }
+
+                        // NEW: shipment meta
+            $shipment = [
+                'tracking' => (string) $o->get_meta( '_wcss_tracking' ),
+                'carrier'  => (string) $o->get_meta( '_wcss_carrier' ),
+                'edd'      => (string) $o->get_meta( '_wcss_edd' ), // optional: YYYY-MM-DD
+            ];
+
         return [
             'id'         => $o->get_id(),
             'number'     => $o->get_order_number(),
@@ -329,83 +363,142 @@ class WCSS_REST_Orders {
                 'id'   => $store_id,
                 'name' => $store_name,
             ],
+
+            'shipment' => $shipment,
         ];
 
     }
 
 
-public function orders_read( WP_REST_Request $req ) {
-    $o = wc_get_order( (int) $req['id'] );
-    if ( ! $o ) return new WP_Error('not_found','Order not found',[ 'status'=>404 ]);
+    public function orders_read( WP_REST_Request $req ) {
+        $o = wc_get_order( (int) $req['id'] );
+        if ( ! $o ) return new WP_Error('not_found','Order not found',[ 'status'=>404 ]);
 
-    $dto = $this->dto_order( $o );
+        $dto = $this->dto_order( $o );
 
-    // Addresses
-    $dto['billing']  = $this->dto_addr( $o->get_address('billing') );
-    $dto['shipping'] = $this->dto_addr( $o->get_address('shipping') );
+        // Addresses
+        $dto['billing']  = $this->dto_addr( $o->get_address('billing') );
+        $dto['shipping'] = $this->dto_addr( $o->get_address('shipping') );
 
-    // Items (include SKU, product/variation IDs)
-    $dto['items'] = [];
-    foreach ( $o->get_items() as $item_id => $item ) {
-        if ( ! $item instanceof WC_Order_Item_Product ) continue;
+        // Items (include SKU, product/variation IDs)
+        $dto['items'] = [];
+        foreach ( $o->get_items() as $item_id => $item ) {
+            if ( ! $item instanceof WC_Order_Item_Product ) continue;
 
-        $product   = $item->get_product();              // may be null if deleted
-        $name      = $item->get_name();
-        $qty       = (int) $item->get_quantity();
-        $line_total= (float) $item->get_total();
-        $sku       = $product instanceof WC_Product ? $product->get_sku() : '';
-        $pid       = $product instanceof WC_Product ? $product->get_id() : 0;
-        $vid       = $product instanceof WC_Product_Variation ? $product->get_id() : 0;
+            $product   = $item->get_product();              // may be null if deleted
+            $name      = $item->get_name();
+            $qty       = (int) $item->get_quantity();
+            $line_total= (float) $item->get_total();
+            $sku       = $product instanceof WC_Product ? $product->get_sku() : '';
+            $pid       = $product instanceof WC_Product ? $product->get_id() : 0;
+            $vid       = $product instanceof WC_Product_Variation ? $product->get_id() : 0;
 
-        // Variation attributes (optional, handy in UI)
-        $attrs = [];
-        if ( $product instanceof WC_Product_Variation ) {
-            $attrs = $product->get_attributes();
-        } elseif ( method_exists( $item, 'get_variation_attributes' ) ) {
-            $attrs = $item->get_variation_attributes();
+            // Variation attributes (optional, handy in UI)
+            $attrs = [];
+            if ( $product instanceof WC_Product_Variation ) {
+                $attrs = $product->get_attributes();
+            } elseif ( method_exists( $item, 'get_variation_attributes' ) ) {
+                $attrs = $item->get_variation_attributes();
+            }
+
+            $dto['items'][] = [
+                'item_id'     => $item_id,
+                'product_id'  => $pid ?: $item->get_product_id(),
+                'variation_id'=> $vid ?: $item->get_variation_id(),
+                'name'        => $name,
+                'sku'         => $sku,
+                'qty'         => $qty,
+                'subtotal'    => wc_price( (float) $item->get_subtotal() ),
+                'total'       => wc_price( $line_total ),
+                'attributes'  => $attrs,
+            ];
         }
 
-        $dto['items'][] = [
-            'item_id'     => $item_id,
-            'product_id'  => $pid ?: $item->get_product_id(),
-            'variation_id'=> $vid ?: $item->get_variation_id(),
-            'name'        => $name,
-            'sku'         => $sku,
-            'qty'         => $qty,
-            'subtotal'    => wc_price( (float) $item->get_subtotal() ),
-            'total'       => wc_price( $line_total ),
-            'attributes'  => $attrs,
-        ];
+        // Timeline/events if you’re using it
+        if ( class_exists( 'WCSS_Order_Events' ) ) {
+            $dto['timeline'] = WCSS_Order_Events::for_order( $o->get_id(), 50 );
+        }
+
+        // Attach ledger only if store set
+        if ( ! empty( $dto['store']['id'] ) && class_exists( 'WCSS_Ledger' ) ) {
+            $ym  = gmdate('Y-m');
+            $row = WCSS_Ledger::get( (int) $dto['store']['id'], $ym ) ?: [ 'orders_count'=>0, 'spend_total'=>0 ];
+            $quota  = (int) get_post_meta( (int) $dto['store']['id'], '_store_quota',  true );
+            $budget = (float) get_post_meta( (int) $dto['store']['id'], '_store_budget', true );
+
+            $dto['ledger'] = [
+                'month'            => $ym,
+                'used_orders'      => (int) ($row['orders_count'] ?? 0),
+                'used_amount'      => (float) ($row['spend_total'] ?? 0),
+                'quota'            => $quota,
+                'budget'           => $budget,
+                'remaining_orders' => max(0, $quota - (int) ($row['orders_count'] ?? 0)),
+                'remaining_amount' => max(0.0, $budget - (float) ($row['spend_total'] ?? 0)),
+                'currency'         => get_woocommerce_currency(),
+            ];
+        }
+
+        return rest_ensure_response( $dto );
     }
 
-    // Timeline/events if you’re using it
-    if ( class_exists( 'WCSS_Order_Events' ) ) {
-        $dto['timeline'] = WCSS_Order_Events::for_order( $o->get_id(), 50 );
+
+    public function orders_update_shipment( WP_REST_Request $req ) {
+        $o = wc_get_order( (int) $req['id'] );
+        if ( ! $o ) return new WP_Error('not_found','Order not found',[ 'status'=>404 ]);
+    
+        $tracking = trim( (string) $req->get_param('tracking') );
+        $carrier  = trim( (string) $req->get_param('carrier') );
+        $edd      = trim( (string) $req->get_param('edd') );
+    
+        if ( $tracking !== '' ) $o->update_meta_data( '_wcss_tracking', $tracking );
+        if ( $carrier  !== '' ) $o->update_meta_data( '_wcss_carrier', $carrier );
+        if ( $edd      !== '' ) $o->update_meta_data( '_wcss_edd', $edd );
+    
+        $o->save();
+        if ( $tracking || $carrier || $edd ) {
+            WCSS_Order_Events::log( $o->get_id(), 'shipment_update', [
+                'tracking' => $tracking, 'carrier' => $carrier, 'edd' => $edd
+            ] );
+        }
+        return rest_ensure_response([ 'ok' => true ]);
     }
-
-    // Attach ledger only if store set
-    if ( ! empty( $dto['store']['id'] ) && class_exists( 'WCSS_Ledger' ) ) {
-        $ym  = gmdate('Y-m');
-        $row = WCSS_Ledger::get( (int) $dto['store']['id'], $ym ) ?: [ 'orders_count'=>0, 'spend_total'=>0 ];
-        $quota  = (int) get_post_meta( (int) $dto['store']['id'], '_store_quota',  true );
-        $budget = (float) get_post_meta( (int) $dto['store']['id'], '_store_budget', true );
-
-        $dto['ledger'] = [
-            'month'            => $ym,
-            'used_orders'      => (int) ($row['orders_count'] ?? 0),
-            'used_amount'      => (float) ($row['spend_total'] ?? 0),
-            'quota'            => $quota,
-            'budget'           => $budget,
-            'remaining_orders' => max(0, $quota - (int) ($row['orders_count'] ?? 0)),
-            'remaining_amount' => max(0.0, $budget - (float) ($row['spend_total'] ?? 0)),
-            'currency'         => get_woocommerce_currency(),
-        ];
+    
+    public function orders_update_receiving( WP_REST_Request $req ) {
+        $o = wc_get_order( (int) $req['id'] );
+        if ( ! $o ) return new WP_Error('not_found','Order not found',[ 'status'=>404 ]);
+    
+        $received = (bool) $req->get_param('received');
+        $date     = (string) $req->get_param('received_date');
+        $notes    = (string) $req->get_param('notes');
+    
+        $issues   = $req->get_param('issues');
+        if ( ! is_array( $issues ) ) $issues = [];
+    
+        $o->update_meta_data( '_wcss_received', $received ? 'yes' : 'no' );
+        if ( $date )  $o->update_meta_data( '_wcss_received_date', $date );
+        if ( $notes ) $o->update_meta_data( '_wcss_received_notes', $notes );
+    
+        // Save a compact JSON for issues (damage/shortage)
+        $normalized = [];
+        foreach ( $issues as $row ) {
+            if ( ! is_array($row) ) continue;
+            $normalized[] = [
+                'sku'  => sanitize_text_field( $row['sku']  ?? '' ),
+                'type' => in_array( ($row['type'] ?? ''), ['damage','shortage'], true ) ? $row['type'] : 'damage',
+                'qty'  => (int) ($row['qty'] ?? 0),
+                'note' => sanitize_textarea_field( (string) ($row['note'] ?? '') ),
+            ];
+        }
+        $o->update_meta_data( '_wcss_receiving_issues', wp_json_encode( $normalized ) );
+    
+        $o->save();
+        WCSS_Order_Events::log( $o->get_id(), 'receiving_update', [
+            'received' => $received, 'received_date' => $date, 'issues' => $normalized
+        ] );
+    
+        return rest_ensure_response([ 'ok' => true ]);
     }
-
-    return rest_ensure_response( $dto );
-}
-
-
+    
 
     private function dto_addr( array $a ): array {
         return [
