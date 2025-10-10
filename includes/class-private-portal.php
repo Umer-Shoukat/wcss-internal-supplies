@@ -21,9 +21,8 @@ class WCSS_Private_Portal {
         // Optional: hide the "Create an account" UI if any theme/template tries to show it
         add_filter( 'woocommerce_account_menu_items', [ $this, 'remove_register_menu_item' ], 999 );
         add_filter( 'woocommerce_login_redirect', [ $this, 'login_redirect' ], 10, 2 );
+
     }
-
-
     public function login_redirect( $redirect, $user ) {
         if ( user_can( $user, 'manage_options' ) ) {             // Admins
             return admin_url();
@@ -35,8 +34,7 @@ class WCSS_Private_Portal {
         return wc_get_page_permalink( 'myaccount' );
     }
     
-
-     public function redirect_wp_login_to_account() {
+    public function redirect_wp_login_to_account() {
         // Only redirect non-admins
         if ( ! current_user_can( 'manage_options' ) ) {
             $account_url = wc_get_page_permalink( 'myaccount' );
@@ -68,8 +66,6 @@ class WCSS_Private_Portal {
         wp_safe_redirect( wc_get_page_permalink( 'myaccount' ) );
         exit;
     }
-
-
 
     public function force_login_everywhere() {
 
@@ -110,7 +106,6 @@ class WCSS_Private_Portal {
         wp_safe_redirect( wc_get_page_permalink('myaccount') );
         exit;
     }
-
     /**
      * Block WC register endpoint entirely.
      */
@@ -155,4 +150,6 @@ class WCSS_Private_Portal {
         */
         return false;
     }
+
+
 }

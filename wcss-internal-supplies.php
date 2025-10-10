@@ -41,7 +41,6 @@ require_once WCSS_DIR . 'includes/class-admin-menu-restrict.php';
 require_once WCSS_DIR . 'includes/class-order-events.php';
 
 require_once WCSS_DIR . 'includes/class-checkout-guard.php';
-require_once WCSS_DIR . 'includes/class-access-guard.php';
 
 // require_once WCSS_DIR . 'includes/class-manager-rest.php';
 require_once WCSS_DIR . 'frontend/routes/class-routes-manager.php';
@@ -194,7 +193,6 @@ add_action( 'wcss_bootstrap', function () {
     new WCSS_Vendors();
     new WCSS_REST_Vendors();
     new WCSS_REST_Reports();
-    new WCSS_Access_Guard();
     new WCSS_Checkout_Guard();
 
 } );

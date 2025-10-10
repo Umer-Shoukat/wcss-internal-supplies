@@ -126,4 +126,8 @@ store2
 -- meta field name space update for stores
 -- add 404 page for manager only
 -- restrict user to place order if not attached to any store.
---
+
+      -- Future updates required --
+
+-- notifications to vendor and store users/customer and /manager/ as well for different triggers
+-- crud for users and vendors if required
