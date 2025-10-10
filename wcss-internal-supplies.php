@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 /** ----------------------------------------------------------------
  * Constants
  * --------------------------------------------------------------- */
-define( 'WCSS_VERSION', '0.1.1' );
+define( 'WCSS_VERSION', '2.1.1' );
 define( 'WCSS_FILE', __FILE__ );
 define( 'WCSS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WCSS_URL', plugin_dir_url( __FILE__ ) );
