@@ -1480,3 +1480,77 @@ body.admin-bar {
   background: #f9f9f9;
   border-bottom: 2px solid #ddd;
 }
+
+/* === Order & Store Details Layout === */
+.order-meta,
+.store-details {
+  flex: 1;
+  background: #f9fafb;
+  border: 1px solid #e3e6eb;
+  border-radius: 8px;
+  padding: 16px 20px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Container for both blocks side by side */
+.order-store-wrap {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 768px) {
+  .order-store-wrap {
+    flex-direction: column;
+  }
+}
+
+/* Headings */
+.order-meta h2 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 1.4rem;
+  color: #1a1a1a;
+}
+
+/* Paragraph styling */
+.order-meta p,
+.store-details p {
+  margin: 6px 0;
+  font-size: 0.95rem;
+  color: #333;
+}
+
+/* Bold labels */
+.order-meta strong,
+.store-details strong {
+  color: #111;
+  font-weight: 600;
+}
+
+/* Light muted info (like Store ID, City) */
+.store-details .muted {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+/* Add subtle divider between info lines */
+.store-details p:not(:last-child),
+.order-meta p:not(:last-child) {
+  border-bottom: 1px dashed #e2e2e2;
+  padding-bottom: 4px;
+}
+
+/* Highlight totals */
+.order-meta .woocommerce-Price-amount {
+  font-weight: 600;
+  color: #0068c9;
+}
+
+/* Optional hover effect */
+.order-meta:hover,
+.store-details:hover {
+  background: #f1f5f9;
+  border-color: #d1d9e0;
+}

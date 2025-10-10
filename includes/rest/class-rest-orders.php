@@ -320,24 +320,34 @@ class WCSS_REST_Orders {
 
     private function dto_order( WC_Order $o ): array {
 
-            $store_id = (int) $o->get_meta( '_wcss_store_id' );
-            $store_id = $store_id ?: 0;
+            // $store_id = (int) $o->get_meta( '_wcss_store_id' );
+            // $store_id = $store_id ?: 0;
         
+            $sid   = (int) $o->get_meta('_wcss_store_id');
+            $store = [
+                'id'    => $sid ?: null,
+                'name'  => $sid ? ( get_the_title($sid) ?: '' ) : '',
+                'code'  => $sid ? (string) get_post_meta($sid, '_store_code',  true)  : '',
+                'city'  => $sid ? (string) get_post_meta($sid, '_store_city',  true)  : '',
+                'state' => $sid ? (string) get_post_meta($sid, '_store_state', true)  : '',
+            ];
+
+
             // Robust store name resolution
-            $store_name = '';
-            if ( $store_id ) {
-                $p = get_post( $store_id );
-                if ( $p && ! is_wp_error( $p ) ) {
-                    $store_name = $p->post_title ?: '';
-                }
-                if ( $store_name === '' ) {
-                    // fall back to a useful code/meta so UI isn’t blank
-                    $code = get_post_meta( $store_id, '_store_code', true );
-                    if ( $code ) {
-                        $store_name = $code;
-                    }
-                }
-            }
+            // $store_name = '';
+            // if ( $store_id ) {
+            //     $p = get_post( $store_id );
+            //     if ( $p && ! is_wp_error( $p ) ) {
+            //         $store_name = $p->post_title ?: '';
+            //     }
+            //     if ( $store_name === '' ) {
+            //         // fall back to a useful code/meta so UI isn’t blank
+            //         $code = get_post_meta( $store_id, '_store_code', true );
+            //         if ( $code ) {
+            //             $store_name = $code;
+            //         }
+            //     }
+            // }
 
                         // NEW: shipment meta
             $shipment = [
@@ -357,13 +367,7 @@ class WCSS_REST_Orders {
             'customer'   => $o->get_billing_company() ?: $o->get_billing_email(),
             'edd'        => $o->get_meta('_wcss_expected_delivery_date'),
             'ref'        => $o->get_meta('_wcss_internal_ref'),
-    
-            // store context
-            'store'      => [
-                'id'   => $store_id,
-                'name' => $store_name,
-            ],
-
+            'store'      => $store,
             'shipment' => $shipment,
         ];
 

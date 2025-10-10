@@ -858,6 +858,7 @@
   window.initStoreEdit = function (id) {
     const $msg = $("#s-msg");
     const $sel = $("#s-user");
+    const $save = jQuery("#s-save");
 
     function toast(t, ok = true) {
       $msg
@@ -866,6 +867,7 @@
         .text(t)
         .show();
     }
+    $save.prop("disabled", true);
 
     // fetch store + users in parallel
     const reqStore = $.ajax({
@@ -874,16 +876,30 @@
       dataType: "json",
     });
 
+    // const reqUsers = $.ajax({
+    //   url: WCSSM.rest + "users", // returns only unassigned store_employee
+    //   headers: { "X-WP-Nonce": WCSSM.nonce },
+    //   dataType: "json",
+    // });
+
     const reqUsers = $.ajax({
-      url: WCSSM.rest + "users", // returns only unassigned store_employee
+      url: WCSSM.rest + "users?store_id=" + encodeURIComponent(id),
       headers: { "X-WP-Nonce": WCSSM.nonce },
       dataType: "json",
     });
 
     $.when(reqStore, reqUsers)
       .done(function (storeRes, usersRes) {
+        console.log(usersRes);
+
         const s = storeRes[0] || {};
-        const users = usersRes[0] || [];
+        // const users = usersRes[0] || [];
+        const usersRaw = usersRes[0];
+        const users = Array.isArray(usersRaw)
+          ? usersRaw
+          : usersRaw && Array.isArray(usersRaw.items)
+          ? usersRaw.items
+          : [];
 
         // fill form fields
         $("#s-name").val(s.name || "");
@@ -894,29 +910,84 @@
         $("#s-budget").val(s.budget ?? "");
 
         // rebuild the user dropdown
+        // $sel.empty();
+        // $sel.append($("<option>").val("").text("Select a Store Employee"));
+        // users.forEach(function (u) {
+        //   $sel.append(
+        //     $("<option>")
+        //       .val(u.id)
+        //       .text(u.name + (u.email ? " — " + u.email : ""))
+        //   );
+        // });
+
+        // rebuild dropdown
         $sel.empty();
-        $sel.append($("<option>").val("").text("Select a Store Employee"));
+        $sel.append(jQuery("<option>").val("").text("Select a Store Employee"));
+        // add available (unassigned) users
+        // users.forEach(function (u) {
+        //   $sel.append(
+        //     jQuery("<option>")
+        //       .val(String(u.id))
+        //       .text(u.name + (u.email ? " — " + u.email : ""))
+        //   );
+        // });
+
         users.forEach(function (u) {
-          $sel.append(
-            $("<option>")
-              .val(u.id)
-              .text(u.name + (u.email ? " — " + u.email : ""))
-          );
+          var label =
+            (u.name || "User #" + u.id) + (u.email ? " — " + u.email : "");
+          if (u.current) label += " (current)";
+          $sel.append($("<option>").val(String(u.id)).text(label));
         });
 
         // ensure currently assigned user appears & is pre-selected
-        const curId = s.user_id ? String(s.user_id) : "";
-        if (curId) {
-          if (!$sel.find('option[value="' + curId + '"]').length) {
-            // inject current assigned user if not in the unassigned list
+
+        // const curId = s.user_id ? String(s.user_id) : "";
+        // console.log(curId);
+
+        // if (curId) {
+        //   if (!$sel.find('option[value="' + curId + '"]').length) {
+        //     // inject current assigned user if not in the unassigned list
+        //     const label =
+        //       (s.user_name || "User #" + curId) +
+        //       (s.user_email ? " — " + s.user_email : "") +
+        //       " (current)";
+        //     $sel.append($("<option>").val(curId).text(label));
+        //   }
+        //   $sel.val(curId);
+        // }
+
+        // ensure current assigned user is present and selected
+
+        // Prefer numeric s.user_id, otherwise match by email from users list
+        let curIdNum = 0;
+        if (s.user_id && /^\d+$/.test(String(s.user_id))) {
+          curIdNum = parseInt(String(s.user_id), 10);
+        } else if (s.user_email) {
+          const match = users.find(
+            (u) =>
+              (u.email || "").toLowerCase() ===
+              String(s.user_email).toLowerCase()
+          );
+          if (match && match.id) curIdNum = parseInt(String(match.id), 10) || 0;
+        }
+
+        // inject current user if they’re not in the unassigned list
+        if (curIdNum > 0) {
+          if (!$sel.find('option[value="' + String(curIdNum) + '"]').length) {
             const label =
-              (s.user_name || "User #" + curId) +
+              (s.user_name || "User #" + curIdNum) +
               (s.user_email ? " — " + s.user_email : "") +
               " (current)";
-            $sel.append($("<option>").val(curId).text(label));
+            $sel.append(jQuery("<option>").val(String(curIdNum)).text(label));
           }
-          $sel.val(curId);
+          $sel.val(String(curIdNum));
+        } else {
+          // fallback: keep placeholder selected
+          $sel.val("");
         }
+
+        // enable Save now that the form is ready
+        $save.prop("disabled", false);
       })
       .fail(function (x) {
         toast(
@@ -930,6 +1001,10 @@
     $("#s-save")
       .off("click")
       .on("click", function () {
+        const valStr = jQuery("#s-user").val();
+        const userId = /^\d+$/.test(String(valStr)) ? parseInt(valStr, 10) : 0;
+
+        console.log(userId);
         const body = {
           name: $("#s-name").val(),
           code: $("#s-code").val(),
@@ -937,10 +1012,14 @@
           state: $("#s-state").val(),
           quota: $("#s-quota").val(),
           budget: $("#s-budget").val(),
-          user_id: parseInt($("#s-user").val(), 10) || 0,
+          // user_id: parseInt($("#s-user").val(), 10) || 0,
+          user_id: Number.isInteger(userId) && userId > 0 ? userId : 0,
         };
 
         if (!body.name) return toast("Store name is required", false);
+        if (!body.code) return toast("Store Code is required", false);
+        if (!body.quota) return toast("Store quota is required", false);
+        if (!body.budget) return toast("Store budget is required", false);
         if (!body.user_id) return toast("Store employee is required", false);
 
         toast("Saving…");
@@ -1234,6 +1313,26 @@
           );
           return;
         }
+        //store lines
+
+        var storeLine = "";
+        console.log(data.store);
+        if (data && data.store && (data.store.id || data.store.name)) {
+          var s = data.store || {};
+          var bits = [];
+
+          if (s.name) bits.push(s.name);
+          if (s.code) bits.push("(" + s.code + ")");
+
+          var loc = [];
+          if (s.city) loc.push(s.city);
+          if (s.state) loc.push(s.state);
+          if (loc.length) bits.push("— " + loc.join(", "));
+
+          if (s.id) bits.push("<span class='muted'>#" + s.id + "</span>");
+
+          storeLine = "<p><strong>Store:</strong> " + bits.join(" ") + "</p>";
+        }
 
         // ledger + store blocks (optional UI, shown only if present)
         var ledgerBlock = "";
@@ -1279,12 +1378,25 @@
         var storeLine = "";
         if (data && data.store && (data.store.name || data.store.id)) {
           storeLine =
+            "<div class='store-details'>" +
             "<p><strong>Store:</strong> " +
-            (data.store.name || "#" + data.store.id) +
-            "</p>";
+            (data.store.name || null) +
+            "<br>" +
+            "<p><strong>Store ID:</strong> " +
+            (data.store.id || null) +
+            "<br>" +
+            "<p><strong>Store Code:</strong> " +
+            (data.store.code || null) +
+            "<br>" +
+            "<p><strong>Store City:</strong> " +
+            (data.store.city || null) +
+            "<br>" +
+            "</p>" +
+            "</div>";
         }
 
         var html =
+          "<div class='order-store-wrap'>" +
           "<div class='order-meta'>" +
           "<h2>Order #" +
           (data.number || orderId) +
@@ -1301,6 +1413,7 @@
           "<p><strong>Customer:</strong> " +
           (data.customer || "") +
           "</p>" +
+          "</div>" +
           storeLine +
           "</div>" +
           "<h3>Items</h3>" +
@@ -1316,9 +1429,7 @@
                     (i.name || "") +
                     "</td>" +
                     "<td>" +
-                    (i.sku
-                      ? "<br><span class='muted sku'>SKU: " + i.sku + "</span>"
-                      : "") +
+                    (i.sku || "") +
                     "</td>" +
                     "<td>" +
                     (i.qty || 0) +
@@ -1340,6 +1451,63 @@
           "<button class='btn btn-danger' id='order-reject'>Reject</button>" +
           "</div>" +
           "<div id='order-msg'></div>";
+
+        // var html =
+        //   "<div class='order-meta'>" +
+        //   "<h2>Order #" +
+        //   (data.number || orderId) +
+        //   "</h2>" +
+        //   "<p><strong>Date:</strong> " +
+        //   (data.date || "") +
+        //   "</p>" +
+        //   "<p><strong>Status:</strong> " +
+        //   (data.status || "") +
+        //   "</p>" +
+        //   "<p><strong>Total:</strong> " +
+        //   (data.total_html || data.total || "") +
+        //   "</p>" +
+        //   "<p><strong>Customer:</strong> " +
+        //   (data.customer || "") +
+        //   "</p>" +
+        //   storeLine +
+        //   "</div>" +
+        //   "<h3>Items</h3>" +
+        //   "<table class='table'>" +
+        //   "<thead><tr><th>Product</th><th>SKU</th><th>Qty</th><th>Total</th></tr></thead>" +
+        //   "<tbody>" +
+        //   (Array.isArray(data.items)
+        //     ? data.items
+        //         .map(function (i) {
+        //           return (
+        //             "<tr>" +
+        //             "<td>" +
+        //             (i.name || "") +
+        //             "</td>" +
+        //             "<td>" +
+        //             (i.sku
+        //               ? "<br><span class='muted sku'>SKU: " + i.sku + "</span>"
+        //               : "") +
+        //             "</td>" +
+        //             "<td>" +
+        //             (i.qty || 0) +
+        //             "</td>" +
+        //             "<td>" +
+        //             (i.total || "") +
+        //             "</td>" +
+        //             "</tr>"
+        //           );
+        //         })
+        //         .join("")
+        //     : "<tr><td colspan='3'>No items</td></tr>") +
+        //   "</tbody>" +
+        //   "</table>" +
+        //   ledgerBlock +
+        //   "<h3>Update Status</h3>" +
+        //   "<div class='actions'>" +
+        //   "<button class='btn btn-success' id='order-approve'>Approve</button> " +
+        //   "<button class='btn btn-danger' id='order-reject'>Reject</button>" +
+        //   "</div>" +
+        //   "<div id='order-msg'></div>";
 
         $wrap.html(html);
 
@@ -1452,6 +1620,8 @@
       });
   };
 })(jQuery);
+
+//dashboard and reporting
 
 (function ($) {
   // ===== Dashboard =====

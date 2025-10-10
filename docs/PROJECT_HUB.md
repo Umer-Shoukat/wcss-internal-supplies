@@ -120,3 +120,6 @@ store-employee-2
 store2
 
 -- updated user-name for git
+
+-- user attached with stores only one user with one store..
+-- edit store also updated..

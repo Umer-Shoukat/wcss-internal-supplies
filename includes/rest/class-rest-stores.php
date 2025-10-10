@@ -459,7 +459,35 @@ class WCSS_REST_Stores {
     //     return rest_ensure_response( $out );
     // }
 
+    // public function list_users( WP_REST_Request $req ) {
+    //     $users = get_users([
+    //         'role__in' => [ 'store_employee' ],
+    //         'number'   => 500,
+    //         'fields'   => [ 'ID', 'user_email', 'display_name' ],
+    //     ]);
+    
+    //     $out = [];
+    //     foreach ( $users as $u ) {
+    //         $store_id = (int) get_user_meta( $u->ID, '_wcss_store_id', true );
+    //         $store_name = $store_id ? get_the_title( $store_id ) : '';
+    
+    //         // 👇 Skip users already assigned to another store
+    //         if ( $store_id && get_post_status( $store_id ) ) {
+    //             continue;
+    //         }
+    
+    //         $out[] = [
+    //             'id'    => (int) $u->ID,
+    //             'name'  => $u->display_name,
+    //             'email' => $u->user_email,
+    //         ];
+    //     }
+    //     return rest_ensure_response( $out );
+    // }
+
     public function list_users( WP_REST_Request $req ) {
+        $current_store_id = (int) $req->get_param('store_id'); // optional: include that store's current user
+    
         $users = get_users([
             'role__in' => [ 'store_employee' ],
             'number'   => 500,
@@ -468,20 +496,30 @@ class WCSS_REST_Stores {
     
         $out = [];
         foreach ( $users as $u ) {
-            $store_id = (int) get_user_meta( $u->ID, '_wcss_store_id', true );
+            $store_id   = (int) get_user_meta( $u->ID, '_wcss_store_id', true );
             $store_name = $store_id ? get_the_title( $store_id ) : '';
     
-            // 👇 Skip users already assigned to another store
-            if ( $store_id && get_post_status( $store_id ) ) {
+            // Skip users assigned to a DIFFERENT store,
+            // but allow the one assigned to the store we're editing
+            if ( $store_id && $store_id !== $current_store_id && get_post_status( $store_id ) ) {
                 continue;
             }
     
             $out[] = [
-                'id'    => (int) $u->ID,
-                'name'  => $u->display_name,
-                'email' => $u->user_email,
+                'id'        => (int) $u->ID,
+                'name'      => $u->display_name,
+                'email'     => $u->user_email,
+                'store_id'  => $store_id ?: null,
+                'store_name'=> $store_name ?: '',
+                'current'   => ($current_store_id && $store_id === $current_store_id), // helpful flag for UI
             ];
         }
+    
+        // (Optional) Put current user first for nicer UX
+        usort( $out, function($a,$b){
+            return ($b['current'] ?? false) <=> ($a['current'] ?? false);
+        });
+    
         return rest_ensure_response( $out );
     }
     
