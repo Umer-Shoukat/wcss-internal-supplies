@@ -123,3 +123,7 @@ store2
 
 -- user attached with stores only one user with one store..
 -- edit store also updated..
+-- meta field name space update for stores
+-- add 404 page for manager only
+-- restrict user to place order if not attached to any store.
+--

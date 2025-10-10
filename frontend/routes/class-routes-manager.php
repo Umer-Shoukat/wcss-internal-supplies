@@ -105,7 +105,6 @@ class WCSS_Route_Manager {
 
     }
 
-
     public function maybe_render() {
         $view   = get_query_var('wcss');
         $action = get_query_var('wcss_action');
@@ -118,82 +117,133 @@ class WCSS_Route_Manager {
             auth_redirect(); exit;
         }
     
-        status_header(200);
-        nocache_headers();
-        show_admin_bar(false);
-        
+        // Enqueue media when needed
         if ( $view === 'products' && in_array( $action, [ 'create', 'edit' ], true ) ) {
             wp_enqueue_media();
         }
-
+    
+        status_header(200);
+        nocache_headers();
+        show_admin_bar(false);
+    
         $base = WCSS_DIR . 'frontend/pages/';
         $file = $this->resolve_view( $base, $view, $action );
-
+    
+        // Expose page context to JS
         $inline = 'window.WCSSM = Object.assign(window.WCSSM||{}, ' . wp_json_encode( [
             'view'   => $view,
             'action' => $action,
             'id'     => $id,
             'home'   => home_url( '/manager/' ),
+            'manager_base' => home_url( '/manager/' ),
         ] ) . ');';
         wp_add_inline_script( 'wcss-manager', $inline, 'after' );
-
-
     
-        if ( $file && file_exists($file) ) {
-    
-            // Capture your page fragment
+        // Render found page
+        if ( $file && file_exists( $file ) ) {
             ob_start();
             include $file;
             $content = ob_get_clean();
-    
-            // 🔑 Minimal shell so enqueued assets print
             ?>
             <!doctype html>
             <html <?php language_attributes(); ?>>
             <head>
                 <meta charset="<?php bloginfo('charset'); ?>">
                 <meta name="viewport" content="width=device-width, initial-scale=1">
-                <?php wp_head(); // <-- this prints your enqueued CSS/JS ?>
+                <?php wp_head(); ?>
             </head>
             <body <?php body_class('wcss-manager-body'); ?>>
-                <?php
-                    // Optional: hide theme header if needed
-                    // echo '<style>#wpadminbar, header.site-header { display:none !important; }</style>';
-                    echo $content;
-                ?>
-                <?php wp_footer(); // <-- prints footer scripts (jQuery, your manager.js if in footer) ?>
+                <?php echo $content; ?>
+                <?php wp_footer(); ?>
             </body>
             </html>
             <?php
             exit;
         }
     
-        echo '<div class="wcssm-wrap"><h1>Manager</h1><p>Page not found.</p></div>';
+        // Manager 404 fallback (styled, inside the manager shell)
+        status_header(404);
+        nocache_headers();
+    
+        $not_found = $base . '404.php';
+        ob_start();
+        if ( file_exists( $not_found ) ) {
+            include $not_found;
+        } else {
+            echo '<div class="wcssm-wrap"><div class="panel"><h1>Not found</h1><p>This page doesn’t exist in the manager portal.</p><p><a class="btn" href="' . esc_url( home_url('/manager') ) . '">← Back to Dashboard</a></p></div></div>';
+        }
+        $content = ob_get_clean();
+        ?>
+        <!doctype html>
+        <html <?php language_attributes(); ?>>
+        <head>
+            <meta charset="<?php bloginfo('charset'); ?>">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <?php wp_head(); ?>
+        </head>
+        <body <?php body_class('wcss-manager-body'); ?>>
+            <?php echo $content; ?>
+            <?php wp_footer(); ?>
+        </body>
+        </html>
+        <?php
         exit;
     }
 
 
     private function resolve_view( string $base, string $view, ?string $action ) {
         switch ( $view ) {
+            case 'dashboard':
+                return $base . 'dashboard.php';
+
             case 'products':
                 if ( $action === 'create' ) return $base . 'products-create.php';
-                if ( $action === 'edit' )   return $base . 'products-edit.php';
-                return $base . 'products.php';
-    
+                if ( $action === 'edit'   ) return $base . 'products-edit.php';
+                if ( $action === null || $action === '' ) return $base . 'products.php';
+                return false; // unknown action → 404
+
             case 'stores':
                 if ( $action === 'create' ) return $base . 'stores-create.php';
-                if ( $action === 'edit' )   return $base . 'stores-edit.php';
-                return $base . 'stores.php';
+                if ( $action === 'edit'   ) return $base . 'stores-edit.php';
+                if ( $action === null || $action === '' ) return $base . 'stores.php';
+                return false;
 
             case 'orders':
-                if ( $action === 'create' ) return $base . 'order-create.php';
-                if ( $action === 'view' )   return $base . 'orders-view.php';
-                return $base . 'orders.php';
+                if ( $action === 'view'   ) return $base . 'orders-view.php';
+                if ( $action === null || $action === '' ) return $base . 'orders.php';
+                return false;
+
+            case 'reports':
+                // if you have a reports index
+                if ( $action === null || $action === '' ) return $base . 'reports.php';
+                return false;
 
             default:
-                return $base . 'dashboard.php';
+                // unknown section → 404
+                return false;
         }
     }
+    // private function resolve_view( string $base, string $view, ?string $action ) {
+    //     switch ( $view ) {
+    //         case 'products':
+    //             if ( $action === 'create' ) return $base . 'products-create.php';
+    //             if ( $action === 'edit' )   return $base . 'products-edit.php';
+    //             return $base . 'products.php';
+    
+    //         case 'stores':
+    //             if ( $action === 'create' ) return $base . 'stores-create.php';
+    //             if ( $action === 'edit' )   return $base . 'stores-edit.php';
+    //             return $base . 'stores.php';
+
+    //         case 'orders':
+    //             if ( $action === 'create' ) return $base . 'order-create.php';
+    //             if ( $action === 'view' )   return $base . 'orders-view.php';
+    //             return $base . 'orders.php';
+
+    //         default:
+    //             return $base . 'dashboard.php';
+    //     }
+    // }
 
 
 }
