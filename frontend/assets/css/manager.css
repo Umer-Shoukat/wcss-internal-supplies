@@ -1451,3 +1451,32 @@ body.admin-bar {
   pointer-events: none;
   z-index: 1;
 }
+
+/* Stores list grid — make header and rows share the exact same 9-col track list */
+#wcssm-stores-grid .row,
+#wcssm-stores-grid .row.head {
+  display: grid;
+  /* ID | Name | Code | City | State | Quota | Budget | User | Actions */
+  grid-template-columns: 60px 1fr 110px 120px 120px 90px 120px 160px 140px;
+  align-items: center;
+}
+
+/* optional: tighten spacing on compact screens */
+@media (max-width: 1100px) {
+  #wcssm-stores-grid .row,
+  #wcssm-stores-grid .row.head {
+    grid-template-columns: 60px 1fr 100px 110px 110px 80px 110px 140px 120px;
+  }
+}
+
+/* keep your existing visual tweaks */
+#wcssm-stores-grid .row {
+  padding: 10px 12px;
+  border-bottom: 1px solid #eee;
+  font-size: 14px;
+}
+#wcssm-stores-grid .row.head {
+  font-weight: 600;
+  background: #f9f9f9;
+  border-bottom: 2px solid #ddd;
+}

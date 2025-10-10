@@ -468,96 +468,6 @@
 
 /* create new vendor popup */
 
-// ===== Vendor modal (Create-from-Product) =====
-/*
-(function ($) {
-  function vendorToast(msg, ok) {
-    $("#vendor-msg")
-      .removeClass("ok err")
-      .addClass(ok ? "ok" : "err")
-      .text(msg || "")
-      .show();
-  }
-
-  function openVendorModal() {
-    $("#vendor-msg").text("");
-    $("#v-name, #v-email, #v-phone, #v-address").val("");
-    $("#vendor-modal").prop("hidden", false);
-    $("#v-name").trigger("focus");
-  }
-  function closeVendorModal() {
-    $("#vendor-modal").prop("hidden", true);
-  }
-
-  // Wire buttons when the page has the vendor UI
-  $(document).on("click", "#open-vendor-modal", function () {
-    openVendorModal();
-  });
-  $(document).on("click", "#vendor-modal-close", function () {
-    closeVendorModal();
-  });
-  // click backdrop to close
-  $(document).on("click", ".wcssm-modal__backdrop", function () {
-    closeVendorModal();
-  });
-
-  // Save vendor → POST /vendors → add option to #p-vendors and select it
-  $(document).on("click", "#vendor-save", function () {
-    var name = ($("#v-name").val() || "").trim();
-    var email = ($("#v-email").val() || "").trim();
-    var phone = ($("#v-phone").val() || "").trim();
-    var address = ($("#v-address").val() || "").trim();
-
-    if (!name) {
-      vendorToast("Vendor name is required", false);
-      return;
-    }
-    vendorToast("Saving…", true);
-
-    $.ajax({
-      url: (WCSSM.rest || "/wp-json/wcss/v1/") + "vendors",
-      method: "POST",
-      headers: {
-        "X-WP-Nonce": WCSSM.nonce,
-        "Content-Type": "application/json",
-      },
-      data: JSON.stringify({
-        name: name,
-        email: email,
-        phone: phone,
-        address: address,
-      }),
-      dataType: "json",
-    })
-      .done(function (v) {
-        // Expect { id, name, ... } back
-        if (!v || !v.id) {
-          vendorToast("Unexpected response from server.", false);
-          return;
-        }
-        // add & select in the multi-select
-        var $sel = $("#p-vendors");
-        if ($sel.find('option[value="' + v.id + '"]').length === 0) {
-          $("<option>").val(v.id).text(v.name).appendTo($sel);
-        }
-        $sel.find('option[value="' + v.id + '"]').prop("selected", true);
-
-        vendorToast("Vendor created.", true);
-        setTimeout(closeVendorModal, 400);
-      })
-      .fail(function (x) {
-        vendorToast(
-          x.responseJSON && x.responseJSON.message
-            ? x.responseJSON.message
-            : "Failed to create vendor",
-          false
-        );
-      });
-  });
-})(jQuery);
-
-*/
-
 (function ($) {
   function vendorToast(msg, ok) {
     $("#vendor-msg")
@@ -686,7 +596,7 @@
     function render(items) {
       const head = `
       <div class="row head">
-        <div>ID</div><div>Name</div><div>Code</div><div>City</div><div>State</div><div>Quota</div><div>Budget</div><div>Actions</div>
+        <div>ID</div><div>Name</div><div>Code</div><div>City</div><div>State</div><div>Quota</div><div>Budget</div><div>User</div><div>Actions</div>
       </div>`;
       const rows = (items || [])
         .map(
@@ -699,6 +609,7 @@
         <div>${escapeHtml(s.state || "")}</div>
         <div>${s.quota ?? 0}</div>
         <div>${(s.budget ?? 0).toLocaleString()}</div>
+        <div>${s.user_id}</div>
         <div>
           <a class="btn btn-sm" href="edit/${s.id}">Edit</a>
           <button class="btn btn-sm btn-danger st-del" data-id="${
@@ -836,11 +747,12 @@
   // -------------------------------------
   // STORES – Create
   // -------------------------------------
+
+  // STORES – Create
   window.initStoreCreate = function () {
     const $msg = $("#s-msg");
-    function val(id) {
-      return $("#" + id).val();
-    }
+    const $btn = $("#s-save");
+
     function toast(t, ok = true) {
       $msg
         .removeClass("err ok")
@@ -848,47 +760,105 @@
         .text(t)
         .show();
     }
+    function val(id) {
+      return ($("#" + id).val() || "").trim();
+    }
 
-    $("#s-save")
-      .off("click")
-      .on("click", function () {
-        const payload = {
-          name: val("s-name"),
-          code: val("s-code"),
-          city: val("s-city"),
-          state: val("s-state"),
-          quota: val("s-quota"),
-          budget: val("s-budget"),
-        };
-        if (!payload.name) return toast("Name is required", false);
-
-        toast("Saving…");
-        $.ajax({
-          url: WCSSM.rest + "stores",
-          method: "POST",
-          headers: {
-            "X-WP-Nonce": WCSSM.nonce,
-            "Content-Type": "application/json",
-          },
-          data: JSON.stringify(payload),
-        })
-          .done(function () {
-            toast("Created! Redirecting…", true);
-            setTimeout(function () {
-              window.location = WCSSM.home + "stores";
-            }, 800);
-          })
-          .fail(function (x) {
-            toast("Error: " + (x.responseJSON?.message || x.statusText), false);
-          });
+    // populate dropdown with store_employee users
+    $.ajax({
+      url: WCSSM.rest + "users",
+      headers: { "X-WP-Nonce": WCSSM.nonce },
+      dataType: "json",
+    }).done(function (list) {
+      var $u = $("#s-user").empty();
+      $u.append($("<option>").val("").text("Select a Store Employee"));
+      (list || []).forEach(function (u) {
+        $u.append(
+          $("<option>")
+            .val(u.id)
+            .text(u.name + " — " + (u.email || ""))
+        );
       });
+    });
+
+    $btn.off("click").on("click", function () {
+      const payload = {
+        name: val("s-name"),
+        code: val("s-code"),
+        city: val("s-city"),
+        state: val("s-state"),
+        quota: val("s-quota"),
+        budget: val("s-budget"),
+        user_id: parseInt($("#s-user").val(), 10) || 0,
+      };
+      console.log("step 1");
+      // Required fields (match server-side)
+      if (!payload.name) return toast("Name is required", false);
+      if (!payload.code) return toast("Code is required", false);
+      if (!payload.quota) return toast("Quota is required", false);
+      if (!payload.budget) return toast("Budget is required", false);
+      if (!payload.user_id) return toast("Select a Store Employee.", false);
+
+      console.log("step 2");
+
+      // If you also want these required on the front end:
+      // if (!payload.city)  return toast("City is required", false);
+      // if (!payload.state) return toast("State/Province is required", false);
+
+      // Numeric validation when present
+      if (
+        payload.quota !== "" &&
+        (!/^\d+$/.test(payload.quota) || parseInt(payload.quota, 10) < 0)
+      ) {
+        return toast("Quota must be a non-negative integer.", false);
+      }
+      if (
+        payload.budget !== "" &&
+        (isNaN(payload.budget) || parseFloat(payload.budget) < 0)
+      ) {
+        return toast("Budget must be a non-negative number.", false);
+      }
+
+      console.log("step 3");
+
+      toast("Saving…");
+      $btn.prop("disabled", true);
+
+      $.ajax({
+        url: WCSSM.rest + "stores",
+        method: "POST",
+        headers: {
+          "X-WP-Nonce": WCSSM.nonce,
+          "Content-Type": "application/json",
+        },
+        data: JSON.stringify(payload),
+        dataType: "json",
+      })
+        .done(function () {
+          toast("Created! Redirecting…", true);
+          setTimeout(function () {
+            window.location = (WCSSM.home || "/manager/") + "stores";
+          }, 800);
+        })
+        .fail(function (x) {
+          const msg =
+            x.responseJSON?.message || x.statusText || "Request failed";
+          toast(msg, false);
+        })
+        .always(function () {
+          $btn.prop("disabled", false);
+        });
+    });
   };
 
   // -------------------------------------
   // STORES – Edit
   // -------------------------------------
+
   window.initStoreEdit = function (id) {
     const $msg = $("#s-msg");
+    const $sel = $("#s-user");
+
     function toast(t, ok = true) {
       $msg
         .removeClass("err ok")
@@ -897,27 +867,66 @@
         .show();
     }
 
-    function fill(s) {
-      $("#s-name").val(s.name || "");
-      $("#s-code").val(s.code || "");
-      $("#s-city").val(s.city || "");
-      $("#s-state").val(s.state || "");
-      $("#s-quota").val(s.quota ?? "");
-      $("#s-budget").val(s.budget ?? "");
-    }
-
-    $.ajax({
+    // fetch store + users in parallel
+    const reqStore = $.ajax({
       url: WCSSM.rest + "stores/" + id,
       headers: { "X-WP-Nonce": WCSSM.nonce },
-    })
-      .done(fill)
-      .fail((x) =>
-        toast(
-          "Load failed: " + (x.responseJSON?.message || x.statusText),
-          false
-        )
-      );
+      dataType: "json",
+    });
 
+    const reqUsers = $.ajax({
+      url: WCSSM.rest + "users", // returns only unassigned store_employee
+      headers: { "X-WP-Nonce": WCSSM.nonce },
+      dataType: "json",
+    });
+
+    $.when(reqStore, reqUsers)
+      .done(function (storeRes, usersRes) {
+        const s = storeRes[0] || {};
+        const users = usersRes[0] || [];
+
+        // fill form fields
+        $("#s-name").val(s.name || "");
+        $("#s-code").val(s.code || "");
+        $("#s-city").val(s.city || "");
+        $("#s-state").val(s.state || "");
+        $("#s-quota").val(s.quota ?? "");
+        $("#s-budget").val(s.budget ?? "");
+
+        // rebuild the user dropdown
+        $sel.empty();
+        $sel.append($("<option>").val("").text("Select a Store Employee"));
+        users.forEach(function (u) {
+          $sel.append(
+            $("<option>")
+              .val(u.id)
+              .text(u.name + (u.email ? " — " + u.email : ""))
+          );
+        });
+
+        // ensure currently assigned user appears & is pre-selected
+        const curId = s.user_id ? String(s.user_id) : "";
+        if (curId) {
+          if (!$sel.find('option[value="' + curId + '"]').length) {
+            // inject current assigned user if not in the unassigned list
+            const label =
+              (s.user_name || "User #" + curId) +
+              (s.user_email ? " — " + s.user_email : "") +
+              " (current)";
+            $sel.append($("<option>").val(curId).text(label));
+          }
+          $sel.val(curId);
+        }
+      })
+      .fail(function (x) {
+        toast(
+          "Load failed: " +
+            (x.responseJSON?.message || x.statusText || "Error"),
+          false
+        );
+      });
+
+    // save
     $("#s-save")
       .off("click")
       .on("click", function () {
@@ -928,8 +937,11 @@
           state: $("#s-state").val(),
           quota: $("#s-quota").val(),
           budget: $("#s-budget").val(),
+          user_id: parseInt($("#s-user").val(), 10) || 0,
         };
-        if (!body.name) return toast("Name is required", false);
+
+        if (!body.name) return toast("Store name is required", false);
+        if (!body.user_id) return toast("Store employee is required", false);
 
         toast("Saving…");
         $.ajax({
@@ -944,7 +956,7 @@
           .done(function () {
             toast("Saved! Redirecting…", true);
             setTimeout(function () {
-              window.location = WCSSM.home + "stores";
+              window.location.href = "/manager/stores";
             }, 800);
           })
           .fail(function (x) {

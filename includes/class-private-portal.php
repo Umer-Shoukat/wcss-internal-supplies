@@ -47,21 +47,6 @@ class WCSS_Private_Portal {
         }
     }
 
-    /*
-    public function block_admin_for_non_admins() {
-        
-        if (
-            ! current_user_can( 'manage_options' )
-            && ! current_user_can( 'manage_woocommerce' )
-            && ! current_user_can( 'edit_shop_orders' )
-            && ( ! defined( 'DOING_AJAX' ) || ! DOING_AJAX )
-        ) {
-            wp_safe_redirect( wc_get_page_permalink( 'myaccount' ) );
-            exit;
-        }
-    }
-    */
-
     public function block_admin_for_non_admins() {
         // Admins can access wp-admin
         if ( current_user_can( 'manage_options' ) ) {

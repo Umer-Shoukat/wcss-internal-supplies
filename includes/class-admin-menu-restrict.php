@@ -24,19 +24,39 @@ class WCSS_Admin_Menu_Restrict {
         add_action( 'admin_head',       [ $this, 'css_hide_leftovers' ] );
     }
 
+    // private function is_exempt_user(): bool {
+    //     if ( ! is_user_logged_in() ) return false;
+    //     $u = wp_get_current_user();
+    //     if ( ! $u || ! $u->exists() ) return false;
+
+    //     // A) by login
+    //     if ( $u->user_login === $this->exempt_user_login ) return true;
+
+    //     // B) by ID (optional)
+    //     // if ( (int) $u->ID === 123 ) return true;
+
+    //     return false;
+    // }
+
     private function is_exempt_user(): bool {
         if ( ! is_user_logged_in() ) return false;
+    
         $u = wp_get_current_user();
         if ( ! $u || ! $u->exists() ) return false;
-
-        // A) by login
-        if ( $u->user_login === $this->exempt_user_login ) return true;
-
-        // B) by ID (optional)
-        // if ( (int) $u->ID === 123 ) return true;
-
+    
+        // Bypass for site admins / portal managers / network super admins
+        if ( user_can( $u, 'manage_options' ) || user_can( $u, 'wcss_manage_portal' ) || is_super_admin( $u->ID ) ) {
+            return true;
+        }
+    
+        // Also allow the explicitly exempted identity (login OR email)
+        if ( $u->user_login === $this->exempt_user_login || $u->user_email === $this->exempt_user_login ) {
+            return true;
+        }
+    
         return false;
     }
+    
 
     /* ------------------------------
      * Classic wp-admin sidebar

@@ -115,3 +115,6 @@ git commit -m "✨ Store CRUD: Completed full Create, Read, Update, Delete flow 
 - Fixes:
   - Guarded null/empty arrays in render paths
   - Kept existing classes/markup; only added IDs where needed
+
+store-employee-2
+store2

@@ -24,6 +24,12 @@
       <div><label>Monthly Budget</label><input id="s-budget" class="input" type="number" min="0" step="0.01"></div>
     </div>
 
+    <div class="grid-1">
+    <label>Store Employee *</label>
+    <select id="s-user" class="input" required></select>
+  </div>
+
+
     <div class="actions">
       <button id="s-save" class="btn btn-primary" type="button">Create</button>
       <span id="s-msg" class="muted"></span>

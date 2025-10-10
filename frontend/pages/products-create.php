@@ -49,6 +49,7 @@
       </div>
     </div>
 
+
     <div class="actions">
       <button type="button" class="btn btn-primary" id="vendor-save">Save vendor</button>
       <span id="vendor-msg" class="muted"></span>
