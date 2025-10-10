@@ -609,7 +609,7 @@
         <div>${escapeHtml(s.state || "")}</div>
         <div>${s.quota ?? 0}</div>
         <div>${(s.budget ?? 0).toLocaleString()}</div>
-        <div>${s.user_id}</div>
+        <div>${s.user_name}</div>
         <div>
           <a class="btn btn-sm" href="edit/${s.id}">Edit</a>
           <button class="btn btn-sm btn-danger st-del" data-id="${
@@ -1315,24 +1315,24 @@
         }
         //store lines
 
-        var storeLine = "";
-        console.log(data.store);
-        if (data && data.store && (data.store.id || data.store.name)) {
-          var s = data.store || {};
-          var bits = [];
+        // var storeLine = "";
+        // console.log(data.store);
+        // if (data && data.store && (data.store.id || data.store.name)) {
+        //   var s = data.store || {};
+        //   var bits = [];
 
-          if (s.name) bits.push(s.name);
-          if (s.code) bits.push("(" + s.code + ")");
+        //   if (s.name) bits.push(s.name);
+        //   if (s.code) bits.push("(" + s.code + ")");
 
-          var loc = [];
-          if (s.city) loc.push(s.city);
-          if (s.state) loc.push(s.state);
-          if (loc.length) bits.push("— " + loc.join(", "));
+        //   var loc = [];
+        //   if (s.city) loc.push(s.city);
+        //   if (s.state) loc.push(s.state);
+        //   if (loc.length) bits.push("— " + loc.join(", "));
 
-          if (s.id) bits.push("<span class='muted'>#" + s.id + "</span>");
+        //   if (s.id) bits.push("<span class='muted'>#" + s.id + "</span>");
 
-          storeLine = "<p><strong>Store:</strong> " + bits.join(" ") + "</p>";
-        }
+        //   storeLine = "<p><strong>Store:</strong> " + bits.join(" ") + "</p>";
+        // }
 
         // ledger + store blocks (optional UI, shown only if present)
         var ledgerBlock = "";

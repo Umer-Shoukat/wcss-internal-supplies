@@ -22,7 +22,32 @@ class WCSS_Private_Portal {
         add_filter( 'woocommerce_account_menu_items', [ $this, 'remove_register_menu_item' ], 999 );
         add_filter( 'woocommerce_login_redirect', [ $this, 'login_redirect' ], 10, 2 );
 
+        add_action( 'template_redirect',          [ $this, 'redirect_manager_from_account' ], 8 );
+
     }
+
+    public function redirect_manager_from_account() {
+        // Skip in admin / REST / AJAX
+        if ( is_admin() ) return;
+        if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) return;
+        if ( defined( 'DOING_AJAX' ) && DOING_AJAX ) return;
+    
+        if ( ! is_user_logged_in() ) return;
+        if ( ! function_exists( 'is_account_page' ) || ! is_account_page() ) return;
+        if ( ! current_user_can( 'wcss_manage_portal' ) ) return;
+    
+        // Allow Woo logout endpoint to pass through
+        if ( function_exists( 'is_wc_endpoint_url' ) && is_wc_endpoint_url( 'customer-logout' ) ) return;
+    
+        // Avoid loops if we're already on /manager/
+        $req = strtolower( $_SERVER['REQUEST_URI'] ?? '' );
+        if ( strpos( $req, '/manager/' ) !== false ) return;
+    
+        wp_safe_redirect( home_url( '/manager/' ) );
+        exit;
+    }
+
+    
     public function login_redirect( $redirect, $user ) {
         if ( user_can( $user, 'manage_options' ) ) {             // Admins
             return admin_url();
@@ -59,8 +84,6 @@ class WCSS_Private_Portal {
             wp_safe_redirect( home_url( '/manager/' ) );
             exit;
         }
-
-
 
         // Everyone else (employees/customers) → My Account
         wp_safe_redirect( wc_get_page_permalink( 'myaccount' ) );

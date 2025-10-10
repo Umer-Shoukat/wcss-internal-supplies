@@ -34,6 +34,11 @@ $current_user = wp_get_current_user();
 
   <div class="nav-right">
     <span class="welcome">Hi, <?php echo esc_html( $current_user->display_name ?: $current_user->user_login ); ?></span>
-    <a class="logout" href="<?php echo esc_url( wp_logout_url() ); ?>">Logout</a>
+        <?php
+    $logout_url = function_exists('wc_get_account_endpoint_url')
+        ? wc_get_account_endpoint_url( 'customer-logout' )
+        : wp_logout_url( home_url('/') );
+    ?>
+    <a class="btn btn-light logout" href="<?php echo esc_url( $logout_url ); ?>">Logout</a>
   </div>
 </nav>
