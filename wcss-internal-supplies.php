@@ -359,3 +359,16 @@ add_action( 'admin_init', function(){
     }
     update_option('wcss_vendor_meta_backfilled', 1);
 });
+
+
+// Add this to your plugin or theme functions.php
+add_shortcode( 'current_user_name', function() {
+    if ( is_user_logged_in() ) {
+        $user = wp_get_current_user();
+        $first_name = $user->first_name ? $user->first_name : $user->display_name;
+        $first_name = esc_html( $first_name );
+
+        return '<p class="current-user-name" style="color: #fff; margin: 0;">' . $first_name . '</p>';
+    }
+    return '';
+});
