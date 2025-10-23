@@ -28,6 +28,7 @@ $current_user = wp_get_current_user();
       <li><a href="<?php echo esc_url( home_url('/manager/orders') ); ?>">Orders</a></li>
       <li><a href="<?php echo esc_url( home_url('/manager/products') ); ?>">Products</a></li>
       <li><a href="<?php echo esc_url( home_url('/manager/stores') ); ?>">Stores</a></li>
+      <li><a href="<?php echo esc_url( home_url('/manager/users') ); ?>">User</a></li>
 
     </ul>
   </div>

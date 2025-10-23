@@ -117,6 +117,8 @@ register_activation_hook( __FILE__, function () {
  * @param mixed  $default
  * @return mixed
  */
+
+ 
 function wcss_get_option( $key, $default = null ) {
     $defaults = [
         'visibility_mode'        => 'public_catalog', // public_catalog | fully_private

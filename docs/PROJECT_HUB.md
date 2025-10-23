@@ -131,3 +131,24 @@ store2
 
 -- notifications to vendor and store users/customer and /manager/ as well for different triggers
 -- crud for users and vendors if required
+
+- Users
+  • Users page scaffold + styles (table, modals, actions)
+  • List store employees with current store assignment
+  • Create Store Employee modal with client-side validation
+  • Assign Store modal shows stores, disables ones already assigned (except current)
+  • Render 'Not Assigned' when user has no store
+
+- Stores REST
+  • Align create/update/DTO with Store CPT meta keys
+  • Enforce one-store-per-user rule on create & update
+  • Keep existing meta keys stable to avoid breaking checkout/budget logic
+
+- Manager shell / 404
+  • Use plugin shell to render /manager/404 with plugin CSS/JS
+  • Ensure manager context (WCSSM) is injected
+
+- UI polish
+  • Minor table + modal CSS
+  • Flash messaging consistency
+  "

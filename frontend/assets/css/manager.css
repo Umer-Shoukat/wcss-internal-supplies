@@ -1554,3 +1554,148 @@ body.admin-bar {
   background: #f1f5f9;
   border-color: #d1d9e0;
 }
+
+/* ===== Users table (manager) ===== */
+#wcssm-users-grid,
+.wcssm-wrap .panel .row.head {
+  display: grid;
+  grid-template-columns: 0.3fr 1.4fr 1.2fr 210px; /* ID | Name | Email | Store | Actions */
+  gap: 8px;
+}
+
+.wcssm-wrap .panel .row.head {
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #111318; /* dark header */
+  color: #fff;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+#wcssm-users-grid .row {
+  display: contents; /* children act as grid cells */
+}
+
+#wcssm-users-grid .row > div {
+  background: #fff;
+  border: 1px solid #e6e8ee;
+  border-radius: 10px;
+  padding: 10px 12px;
+  line-height: 1.35;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+/* ID column */
+#wcssm-users-grid .row > div:nth-child(1) {
+  font-variant-numeric: tabular-nums;
+  justify-content: flex-start;
+}
+
+/* Name column */
+#wcssm-users-grid .row > div:nth-child(2) {
+  font-weight: 600;
+}
+
+/* Email column */
+#wcssm-users-grid .row > div:nth-child(3) {
+  color: #475569;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Store column */
+#wcssm-users-grid .row > div:nth-child(4) .badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 12px;
+  font-weight: 600;
+}
+#wcssm-users-grid .row > div:nth-child(4) .muted {
+  color: #64748b;
+  font-size: 12px;
+}
+
+/* Actions column */
+#wcssm-users-grid .row > div:nth-child(5) {
+  justify-content: flex-start;
+  gap: 8px;
+}
+#wcssm-users-grid .row > div:nth-child(5) .btn {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+/* Empty state */
+#wcssm-users-grid .empty {
+  grid-column: 1 / -1;
+  background: #fff;
+  border: 1px dashed #e6e8ee;
+  color: #64748b;
+  border-radius: 12px;
+  padding: 28px;
+  text-align: center;
+}
+
+/* Responsive */
+@media (max-width: 980px) {
+  #wcssm-users-grid,
+  .wcssm-wrap .panel .row.head {
+    grid-template-columns: 60px 1fr 1fr 1fr 170px;
+  }
+  #wcssm-users-grid .row > div:nth-child(3) {
+    /* email */
+    white-space: normal;
+  }
+}
+
+@media (max-width: 720px) {
+  /* Stack as cards */
+  .wcssm-wrap .panel .row.head {
+    display: none;
+  }
+  #wcssm-users-grid {
+    display: block;
+  }
+  #wcssm-users-grid .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  #wcssm-users-grid .row > div {
+    border-radius: 10px;
+    min-height: 40px;
+  }
+  #wcssm-users-grid .row > div:nth-child(1) {
+    grid-column: 1 / 2;
+  }
+  #wcssm-users-grid .row > div:nth-child(2) {
+    grid-column: 2 / 3;
+  }
+  #wcssm-users-grid .row > div:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+  #wcssm-users-grid .row > div:nth-child(4) {
+    grid-column: 1 / 2;
+  }
+  #wcssm-users-grid .row > div:nth-child(5) {
+    grid-column: 2 / 3;
+    justify-content: flex-end;
+  }
+}
+
+#assign-modal,
+#user-modal {
+  background: #f6f7f8;
+  padding: 10px;
+  border-radius: 5px;
+}

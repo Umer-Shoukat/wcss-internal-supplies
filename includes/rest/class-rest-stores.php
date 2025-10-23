@@ -16,7 +16,18 @@ class WCSS_REST_Stores {
             'callback' => [ $this, 'list_users' ],
         ]);
 
-
+        register_rest_route( self::NS, '/users', [
+            'methods'  => 'POST',
+            'permission_callback' => [ $this, 'can_manage' ], // same cap as your other manager endpoints
+            'callback' => [ $this, 'create_user' ],
+            'args'     => [
+                'first_name' => ['required'=>true,  'sanitize_callback'=>'sanitize_text_field'],
+                'last_name'  => ['required'=>false, 'sanitize_callback'=>'sanitize_text_field'],
+                'email'      => ['required'=>true,  'sanitize_callback'=>'sanitize_email'],
+                // optional: if omitted, we’ll auto-generate a secure password
+                'password'   => ['required'=>false, 'sanitize_callback'=>'sanitize_text_field'],
+            ],
+        ]);
         register_rest_route( self::NS, '/stores', [
             'methods'  => 'GET',
             'permission_callback' => [ $this, 'can_manage' ],
@@ -119,113 +130,6 @@ class WCSS_REST_Stores {
         if ( ! $p || $p->post_type !== 'store_location' ) return new WP_Error('not_found','Store not found',[ 'status'=>404 ]);
         return rest_ensure_response( $this->dto( $p ) );
     }
-
-
-    // public function create( WP_REST_Request $req ) {
-    //     // ——— Sanitize + trim
-    //     $name  = trim( (string) $req->get_param('name') );
-    //     $code  = trim( (string) $req->get_param('code') );
-    //     $city  = trim( (string) $req->get_param('city') );
-    //     $state = trim( (string) $req->get_param('state') );
-
-    //     // ——— Required fields
-    //     if ($name === '' || $code === '') {
-    //         return new WP_Error(
-    //             'wcss_store_bad_input',
-    //             'Name and Code are required.',
-    //             [ 'status' => 400 ]
-    //         );
-    //     }
-
-    //     // ——— Optional: also require City/State (uncomment if you want them mandatory)
-    //     // if ($city === '' || $state === '') {
-    //     //     return new WP_Error(
-    //     //         'wcss_store_bad_input',
-    //     //         'City and State/Province are required.',
-    //     //         [ 'status' => 400 ]
-    //     //     );
-    //     // }
-
-    //     // ——— Validate numeric inputs when provided
-    //     $quota  = $req->get_param('quota');
-    //     $budget = $req->get_param('budget');
-
-    //     if ($quota !== null && $quota !== '' && (!is_numeric($quota) || (int) $quota < 0)) {
-    //         return new WP_Error('wcss_store_bad_quota', 'Quota must be a non-negative integer.', [ 'status' => 400 ]);
-    //     }
-    //     if ($budget !== null && $budget !== '' && (!is_numeric($budget) || (float) $budget < 0)) {
-    //         return new WP_Error('wcss_store_bad_budget', 'Budget must be a non-negative number.', [ 'status' => 400 ]);
-    //     }
-
-    //     // ——— Ensure store code is unique
-    //     $exists = get_posts([
-    //         'post_type'      => 'store_location',
-    //         'post_status'    => 'any',
-    //         'meta_key'       => '_store_code',
-    //         'meta_value'     => $code,
-    //         'fields'         => 'ids',
-    //         'posts_per_page' => 1,
-    //         'no_found_rows'  => true,
-    //         'suppress_filters' => true,
-    //     ]);
-    //     if ( ! empty($exists) ) {
-    //         return new WP_Error(
-    //             'wcss_store_code_exists',
-    //             'A store with this code already exists.',
-    //             [ 'status' => 409 ]
-    //         );
-    //     }
-
-    //     // ——— Create
-    //     $post_id = wp_insert_post([
-    //         'post_type'   => 'store_location',
-    //         'post_title'  => sanitize_text_field( $name ),
-    //         'post_status' => 'publish',
-    //     ], true );
-    //     if ( is_wp_error($post_id) ) return $post_id;
-
-    //     update_post_meta( $post_id, '_store_code',  sanitize_text_field( $code ) );
-    //     update_post_meta( $post_id, '_store_city',  sanitize_text_field( $city ) );
-    //     update_post_meta( $post_id, '_store_state', sanitize_text_field( $state ) );
-
-    //     if ($quota !== null && $quota !== '') {
-    //         update_post_meta( $post_id, '_store_quota', (int) $quota );
-    //     }
-    //     if ($budget !== null && $budget !== '') {
-    //         update_post_meta( $post_id, '_store_budget', wc_format_decimal( $budget ) );
-    //     }
-
-    //     // added required user allocation to create store.. 
-
-    //         $uid = (int) $req->get_param('user_id');
-    //         if ( $uid <= 0 ) {
-    //             return new WP_Error(
-    //                 'wcss_store_user_required',
-    //                 'A Store Employee must be assigned.',
-    //                 [ 'status' => 400 ]
-    //             );
-    //         }
-        
-    //         // 👇 NEW: Check if this user already belongs to another store
-    //         $existing_store = (int) get_user_meta( $uid, '_wcss_store_id', true );
-    //         if ( $existing_store && get_post_status( $existing_store ) ) {
-    //             $store_title = get_the_title( $existing_store ) ?: "#{$existing_store}";
-    //             return new WP_Error(
-    //                 'wcss_user_already_assigned',
-    //                 "This user is already assigned to store {$store_title}. Each user can belong to only one store.",
-    //                 [ 'status' => 400 ]
-    //             );
-    //         }
-        
-    //         // If valid, assign the user to this store
-    //         update_user_meta( $uid, '_wcss_store_id', $post_id );
-
-
-
-
-    //     return rest_ensure_response( $this->dto( get_post($post_id) ) );
-    // }
-
     public function create( WP_REST_Request $req ) {
         // ——— Sanitize + trim
         $name  = trim( (string) $req->get_param('name') );
@@ -336,66 +240,6 @@ class WCSS_REST_Stores {
     
         return rest_ensure_response( $this->dto( get_post( $post_id ) ) );
     }
-
-    // public function update( WP_REST_Request $req ) {
-    //     $id = (int) $req['id'];
-    //     $p  = get_post( $id );
-    //     if ( ! $p || $p->post_type !== 'store_location' ) {
-    //         return new WP_Error( 'not_found', 'Store not found', [ 'status' => 404 ] );
-    //     }
-
-    //     $body = $req->get_json_params() ?: [];
-
-    //     // ---------- Required fields (same spirit as create) ----------
-    //     $name   = isset($body['name'])    ? sanitize_text_field($body['name'])   : '';
-    //     $user_id = isset($body['user_id']) ? (int) $body['user_id'] : 0;
-
-    //     if ( $name === '' ) {
-    //         return new WP_Error( 'wcss_store_name_required', 'Store name is required.', [ 'status' => 400 ] );
-    //     }
-    //     if ( $user_id <= 0 ) {
-    //         return new WP_Error( 'wcss_store_user_required', 'A Store Employee must be assigned.', [ 'status' => 400 ] );
-    //     }
-
-    //     // ---------- Update core fields ----------
-    //     wp_update_post([ 'ID' => $id, 'post_title' => $name ]);
-
-    //     if ( array_key_exists('code', $body) )   update_post_meta( $id, '_store_code',   sanitize_text_field((string) $body['code']) );
-    //     if ( array_key_exists('city', $body) )   update_post_meta( $id, '_store_city',   sanitize_text_field((string) $body['city']) );
-    //     if ( array_key_exists('state', $body) )  update_post_meta( $id, '_store_state',  sanitize_text_field((string) $body['state']) );
-    //     if ( array_key_exists('quota', $body) )  update_post_meta( $id, '_store_quota',  (int) $body['quota'] );
-    //     if ( array_key_exists('budget', $body) ) update_post_meta( $id, '_store_budget', wc_format_decimal( $body['budget'] ) );
-
-    //     // ---------- Enforce one-store-per-user ----------
-    //     // If this user already has a store (different from current), block.
-    //     $existing_store = (int) get_user_meta( $user_id, '_wcss_store_id', true );
-    //     if ( $existing_store && $existing_store !== $id && get_post_status( $existing_store ) ) {
-    //         $store_title = get_the_title( $existing_store ) ?: "#{$existing_store}";
-    //         return new WP_Error(
-    //             'wcss_user_already_assigned',
-    //             "This user is already assigned to store {$store_title}. Each user can belong to only one store.",
-    //             [ 'status' => 400 ]
-    //         );
-    //     }
-
-    //     // If some *other* user is currently assigned to *this* store, unassign them.
-    //     $prev_users = get_users([
-    //         'meta_key'   => '_wcss_store_id',
-    //         'meta_value' => $id,
-    //         'fields'     => [ 'ID' ],
-    //         'number'     => 2, // defensive: we only expect 0 or 1
-    //     ]);
-    //     foreach ( $prev_users as $u ) {
-    //         if ( (int) $u->ID !== $user_id ) {
-    //             delete_user_meta( $u->ID, '_wcss_store_id' );
-    //         }
-    //     }
-
-    //     // Assign the selected user to this store
-    //     update_user_meta( $user_id, '_wcss_store_id', $id );
-
-    //     return rest_ensure_response( $this->dto( get_post( $id ) ) );
-    // }
 
     public function update( WP_REST_Request $req ) {
         $id = (int) $req['id'];
@@ -530,7 +374,6 @@ class WCSS_REST_Stores {
         return rest_ensure_response([ 'ok'=>true ]);
     }
 
-    /* Ledger passthrough (uses WCSS_Ledger) */
     public function store_ledger( WP_REST_Request $req ) {
         $store_id = (int) $req['id'];
         $ym = $req->get_param('month') ?: gmdate('Y-m');
@@ -554,40 +397,6 @@ class WCSS_REST_Stores {
             'currency' => get_woocommerce_currency(),
         ]);
     }
-
-
-    // private function dto( WP_Post $p ): array {
-    //     $code   = get_post_meta( $p->ID, '_store_code',   true );
-    //     $city   = get_post_meta( $p->ID, '_store_city',   true );
-    //     $state  = get_post_meta( $p->ID, '_store_state',  true );
-    //     $quota  = get_post_meta( $p->ID, '_store_quota',  true );
-    //     $budget = get_post_meta( $p->ID, '_store_budget', true );
-
-    //     $assigned = get_users([
-    //         'meta_key'   => '_wcss_store_id',
-    //         'meta_value' => $p->ID,
-    //         'fields'     => 'ID',
-    //         'number'     => 1,
-    //     ]);
-
-    //     $user_id = $assigned ? (int) $assigned[0] : 0;
-    //     // $user_id = (int) get_post_meta( $p->ID, '_wcss_user_id', true );
-    //     $user    = $user_id ? get_userdata( $user_id ) : null;
-
-
-    //     return [
-    //         'id'     => $p->ID,
-    //         'name'   => $p->post_title,
-    //         'code'   => $code,
-    //         'city'   => $city,
-    //         'state'  => $state,
-    //         'quota'  => (int) $quota,
-    //         'budget' => (float) $budget,
-    //         'user_id' => $user ? ($user->display_name ?: $user->user_login) : '',
-    //         'user'      => $user ? ($user->display_name ?: $user->user_login) : '',
-    //         'user_email' => $user ? $user->user_email : '',
-    //     ];
-    // }
 
     private function dto( WP_Post $p ): array {
         // Prefer CPT canonical keys, fall back to legacy to avoid breaking older code
@@ -632,7 +441,6 @@ class WCSS_REST_Stores {
         ];
     }
 
-    
     public function validate_user_id_required( $value ): bool {
         if ( ! is_numeric( $value ) ) return false;
         $uid = (int) $value;
@@ -646,42 +454,146 @@ class WCSS_REST_Stores {
     }
 
     public function list_users( WP_REST_Request $req ) {
-        $current_store_id = (int) $req->get_param('store_id'); // optional: include that store's current user
+
+        $all   = (string) $req->get_param('all') === '1';            // if true => include assigned too
+        $search = trim( (string) $req->get_param('search') );
     
-        $users = get_users([
+        // Only store_employee role
+        $args = [
             'role__in' => [ 'store_employee' ],
             'number'   => 500,
-            'fields'   => [ 'ID', 'user_email', 'display_name' ],
-        ]);
+            'fields'   => [ 'ID', 'user_email', 'display_name', 'user_login' ],
+        ];
+        if ( $search !== '' ) {
+            // basic search across login/email/display name
+            $args['search']         = '*' . $search . '*';
+            $args['search_columns'] = [ 'user_login', 'user_nicename', 'user_email', 'display_name' ];
+        }
+    
+        $users = get_users( $args );
     
         $out = [];
         foreach ( $users as $u ) {
-            $store_id   = (int) get_user_meta( $u->ID, '_wcss_store_id', true );
-            $store_name = $store_id ? get_the_title( $store_id ) : '';
+            $store_id = (int) get_user_meta( $u->ID, '_wcss_store_id', true );
     
-            // Skip users assigned to a DIFFERENT store,
-            // but allow the one assigned to the store we're editing
-            if ( $store_id && $store_id !== $current_store_id && get_post_status( $store_id ) ) {
+            // Old handler skipped assigned users completely — keep that behavior unless all=1
+            if ( ! $all && $store_id && get_post_status( $store_id ) ) {
                 continue;
             }
     
+            // Enrich with store data (if any)
+            $store_name = '';
+            $store_code = '';
+            $store_city = '';
+    
+            if ( $store_id && get_post_status( $store_id ) ) {
+                $store_post = get_post( $store_id );
+                if ( $store_post ) {
+                    $store_name = $store_post->post_title ?: '';
+                    // Use CPT meta keys (don’t break other features)
+                    $store_code = get_post_meta( $store_id, WCSS_Store_CPT::META_CODE, true );
+                    $store_city = get_post_meta( $store_id, WCSS_Store_CPT::META_CITY, true );
+                }
+            }
+    
             $out[] = [
-                'id'        => (int) $u->ID,
-                'name'      => $u->display_name,
-                'email'     => $u->user_email,
-                'store_id'  => $store_id ?: null,
-                'store_name'=> $store_name ?: '',
-                'current'   => ($current_store_id && $store_id === $current_store_id), // helpful flag for UI
+                'id'         => (int) $u->ID,
+                'name'       => $u->display_name ?: $u->user_login,
+                'email'      => $u->user_email,
+                'store_id'   => $store_id ?: 0,
+                'store_name' => $store_name,
+                'store_code' => $store_code,
+                'store_city' => $store_city,
             ];
         }
     
-        // (Optional) Put current user first for nicer UX
-        usort( $out, function($a,$b){
-            return ($b['current'] ?? false) <=> ($a['current'] ?? false);
-        });
-    
         return rest_ensure_response( $out );
+
+
+        // $current_store_id = (int) $req->get_param('store_id'); // optional: include that store's current user
+    
+        // $users = get_users([
+        //     'role__in' => [ 'store_employee' ],
+        //     'number'   => 500,
+        //     'fields'   => [ 'ID', 'user_email', 'display_name' ],
+        // ]);
+    
+        // $out = [];
+        // foreach ( $users as $u ) {
+        //     $store_id   = (int) get_user_meta( $u->ID, '_wcss_store_id', true );
+        //     $store_name = $store_id ? get_the_title( $store_id ) : '';
+    
+        //     // Skip users assigned to a DIFFERENT store,
+        //     // but allow the one assigned to the store we're editing
+        //     if ( $store_id && $store_id !== $current_store_id && get_post_status( $store_id ) ) {
+        //         continue;
+        //     }
+    
+        //     $out[] = [
+        //         'id'        => (int) $u->ID,
+        //         'name'      => $u->display_name,
+        //         'email'     => $u->user_email,
+        //         'store_id'  => $store_id ?: null,
+        //         'store_name'=> $store_name ?: '',
+        //         'current'   => ($current_store_id && $store_id === $current_store_id), // helpful flag for UI
+        //     ];
+        // }
+    
+        // // (Optional) Put current user first for nicer UX
+        // usort( $out, function($a,$b){
+        //     return ($b['current'] ?? false) <=> ($a['current'] ?? false);
+        // });
+    
+        // return rest_ensure_response( $out );
     }
     
-    
+    public function create_user( WP_REST_Request $req ) {
+
+        $first = trim( (string) $req->get_param('first_name') );
+        $last  = trim( (string) $req->get_param('last_name') );
+        $email = sanitize_email( (string) $req->get_param('email') );
+        $pass  = (string) $req->get_param('password');
+
+        if ( $first === '' || ! $email ) {
+            return new WP_Error('wcss_bad_input','First name and valid email are required.', ['status'=>400]);
+        }
+        if ( email_exists( $email ) ) {
+            return new WP_Error('wcss_email_exists','That email is already registered.', ['status'=>409]);
+        }
+
+        // username from email local-part; ensure uniqueness
+        $base = sanitize_user( current( explode('@', $email) ), true );
+        if ( $base === '' ) $base = 'store-emp';
+        $login = $base;
+        $n = 1;
+        while ( username_exists( $login ) ) {
+            $login = $base . $n++;
+        }
+
+        if ( $pass === '' ) {
+            $pass = wp_generate_password( 20, true, true );
+        }
+
+        $user_id = wp_insert_user([
+            'user_login'   => $login,
+            'user_email'   => $email,
+            'user_pass'    => $pass,
+            'first_name'   => $first,
+            'last_name'    => $last,
+            'display_name' => trim($first.' '.$last),
+            'role'         => 'store_employee', // important: only this role
+        ]);
+
+        if ( is_wp_error( $user_id ) ) {
+            return new WP_Error('wcss_user_create_failed', $user_id->get_error_message(), ['status'=>500]);
+        }
+
+        // return in SAME shape as list_users() so the frontend can just append + select
+        return rest_ensure_response([
+            'id'    => (int) $user_id,
+            'name'  => get_the_author_meta('display_name', $user_id),
+            'email' => $email,
+        ]);
+    }
+
 }

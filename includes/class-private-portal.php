@@ -24,6 +24,7 @@ class WCSS_Private_Portal {
 
         add_action( 'template_redirect',          [ $this, 'redirect_manager_from_account' ], 8 );
 
+
     }
 
     public function redirect_manager_from_account() {

@@ -1849,3 +1849,430 @@
     };
   })(jQuery);
 })(jQuery);
+
+// users crud..
+
+(function ($) {
+  // ===== Users page =====
+  window.initUsersList = function () {
+    var $grid = $("#wcssm-users-grid");
+    var $flash = $("#wcssm-flash");
+    var storesCache = []; // [{id,name}]
+    var usersCache = []; // from API
+
+    function flash(msg, ok) {
+      $flash
+        .removeClass("is-ok is-err")
+        .addClass(ok ? "is-ok" : "is-err")
+        .text(msg)
+        .stop(true, true)
+        .fadeIn(120);
+      setTimeout(function () {
+        $flash.fadeOut(180);
+      }, 2200);
+    }
+
+    function escapeHtml(s) {
+      return (s || "").toString().replace(/[&<>"]/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+      });
+    }
+
+    function render() {
+      if (!usersCache.length) {
+        $grid.html("<p class='muted'>No users found.</p>");
+        return;
+      }
+      var rows = usersCache
+        .map(function (u) {
+          var storeLabel = u.store_name
+            ? escapeHtml(u.store_name)
+            : u.store_id
+            ? "#" + u.store_id
+            : "<span class='muted'> Not Assigned</span>";
+          return (
+            "<div class='row'>" +
+            "<div id='store-id'>#" +
+            u.id +
+            "</div>" +
+            "<div id='user-name'>" +
+            escapeHtml(u.name || "User #" + u.id) +
+            "</div>" +
+            "<div id='store-email'>" +
+            escapeHtml(u.email || "") +
+            "</div>" +
+            "<div id='store-name'>" +
+            (storeLabel && storeLabel.trim() !== "-"
+              ? storeLabel
+              : "Not Assigned") +
+            "</div>" +
+            "</div>"
+          );
+        })
+        .join("");
+      $grid.html(rows);
+    }
+
+    function loadUsers() {
+      $grid.html("Loading…");
+      return $.ajax({
+        url: (WCSSM.rest || "/wp-json/wcss/v1/") + "users?all=1",
+        headers: { "X-WP-Nonce": WCSSM.nonce },
+        dataType: "json",
+      })
+        .done(function (list) {
+          usersCache = Array.isArray(list) ? list : [];
+          render();
+        })
+        .fail(function (x) {
+          $grid.html("Error: " + (x.responseJSON?.message || x.statusText));
+        });
+    }
+
+    function loadStores() {
+      // Use your existing stores endpoint (returns items: [{id,name,...}])
+      return $.ajax({
+        url: (WCSSM.rest || "/wp-json/wcss/v1/") + "stores",
+        headers: { "X-WP-Nonce": WCSSM.nonce },
+        dataType: "json",
+      }).done(function (d) {
+        storesCache =
+          d && d.items
+            ? d.items.map(function (s) {
+                return { id: s.id, name: s.name };
+              })
+            : [];
+      });
+    }
+
+    // ----- Create User modal -----
+    $("#u-new")
+      .off("click")
+      .on("click", function () {
+        $("#um-first,#um-last,#um-email").val("");
+        $("#user-modal").fadeIn(120);
+      });
+    $("#um-cancel")
+      .off("click")
+      .on("click", function () {
+        $("#user-modal").fadeOut(120);
+      });
+    $("#um-save")
+      .off("click")
+      .on("click", function () {
+        var first = $("#um-first").val().trim();
+        var last = $("#um-last").val().trim();
+        var email = $("#um-email").val().trim();
+        if (!first) {
+          alert("First name is required.");
+          return;
+        }
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          alert("Valid email is required.");
+          return;
+        }
+        $("#um-save").prop("disabled", true).text("Creating…");
+        $.ajax({
+          url: (WCSSM.rest || "/wp-json/wcss/v1/") + "users",
+          method: "POST",
+          headers: {
+            "X-WP-Nonce": WCSSM.nonce,
+            "Content-Type": "application/json",
+          },
+          data: JSON.stringify({
+            first_name: first,
+            last_name: last,
+            email: email,
+          }),
+        })
+          .done(function (u) {
+            flash("User created.", true);
+            $("#user-modal").fadeOut(120);
+            loadUsers();
+          })
+          .fail(function (x) {
+            alert(
+              x.responseJSON?.message ||
+                x.statusText ||
+                "Failed to create user."
+            );
+          })
+          .always(function () {
+            $("#um-save").prop("disabled", false).text("Create");
+          });
+      });
+
+    // ----- Assign modal -----
+    // var assignUserId = 0;
+    // $grid.on("click", ".u-assign", function () {
+    //   assignUserId = parseInt($(this).data("id"), 10) || 0;
+    //   if (!assignUserId) return;
+
+    //   // ensure stores ready
+    //   $.when(storesCache.length ? $.Deferred().resolve() : loadStores()).done(
+    //     function () {
+    //       // build select
+    //       var $sel = $("#am-store").empty();
+    //       $sel.append($("<option>").val("").text("— Select a store —"));
+    //       storesCache.forEach(function (s) {
+    //         $sel.append(
+    //           $("<option>")
+    //             .val(String(s.id))
+    //             .text(s.name || "#" + s.id)
+    //         );
+    //       });
+
+    //       var u =
+    //         usersCache.find(function (x) {
+    //           return x.id === assignUserId;
+    //         }) || {};
+    //       $("#am-userline").text(
+    //         (u.name || "User #" + assignUserId) +
+    //           (u.email ? " — " + u.email : "")
+    //       );
+    //       if (u.store_id) $("#am-store").val(String(u.store_id));
+    //       $("#assign-modal").fadeIn(120);
+    //     }
+    //   );
+    // });
+    // $("#am-cancel")
+    //   .off("click")
+    //   .on("click", function () {
+    //     $("#assign-modal").fadeOut(120);
+    //   });
+    // $("#am-save")
+    //   .off("click")
+    //   .on("click", function () {
+    //     var val = $("#am-store").val();
+    //     var storeId = val ? parseInt(val, 10) : 0;
+
+    //     $("#am-save").prop("disabled", true).text("Saving…");
+    //     $.ajax({
+    //       url:
+    //         (WCSSM.rest || "/wp-json/wcss/v1/") +
+    //         "users/" +
+    //         assignUserId +
+    //         "/store",
+    //       method: "POST",
+    //       headers: {
+    //         "X-WP-Nonce": WCSSM.nonce,
+    //         "Content-Type": "application/json",
+    //       },
+    //       data: JSON.stringify({ store_id: storeId }),
+    //     })
+    //       .done(function () {
+    //         $("#assign-modal").fadeOut(120);
+    //         flash("Assignment saved.", true);
+    //         loadUsers();
+    //       })
+    //       .fail(function (x) {
+    //         alert(
+    //           x.responseJSON?.message ||
+    //             x.statusText ||
+    //             "Failed to assign store."
+    //         );
+    //       })
+    //       .always(function () {
+    //         $("#am-save").prop("disabled", false).text("Save");
+    //       });
+    //   });
+
+    // // Unassign
+    // $grid.on("click", ".u-unassign", function () {
+    //   var uid = parseInt($(this).data("id"), 10) || 0;
+    //   if (!uid) return;
+    //   if (!confirm("Unassign this user from their store?")) return;
+    //   $.ajax({
+    //     url: (WCSSM.rest || "/wp-json/wcss/v1/") + "users/" + uid + "/store",
+    //     method: "POST",
+    //     headers: {
+    //       "X-WP-Nonce": WCSSM.nonce,
+    //       "Content-Type": "application/json",
+    //     },
+    //     data: JSON.stringify({ store_id: 0 }),
+    //   })
+    //     .done(function () {
+    //       flash("User unassigned.", true);
+    //       loadUsers();
+    //     })
+    //     .fail(function (x) {
+    //       alert(
+    //         x.responseJSON?.message || x.statusText || "Failed to unassign."
+    //       );
+    //     });
+    // });
+
+    // $("#u-refresh")
+    //   .off("click")
+    //   .on("click", function () {
+    //     loadUsers();
+    //   });
+
+    // ----- Assign modal -----
+    var assignUserId = 0;
+    $grid.on("click", ".u-assign", function () {
+      assignUserId = parseInt($(this).data("id"), 10) || 0;
+      if (!assignUserId) return;
+
+      // ensure stores ready
+      $.when(storesCache.length ? $.Deferred().resolve() : loadStores()).done(
+        function () {
+          const $sel = $("#am-store").empty();
+          const $existingFilter = $("#am-store-filter");
+
+          // add search input if not already there
+          if (!$existingFilter.length) {
+            $("<input>", {
+              id: "am-store-filter",
+              class: "input",
+              placeholder: "Search stores…",
+              style: "margin-bottom:8px;",
+            }).insertBefore("#am-store");
+          }
+
+          // build select
+          $sel.append($("<option>").val("").text("— Select a store —"));
+
+          storesCache.forEach(function (s) {
+            let label =
+              (s.name || "#" + s.id) +
+              (s.code ? " — " + s.code : "") +
+              (s.city ? " — " + s.city : "");
+
+            // if the store is assigned to someone else, show and disable
+            if (s.user && s.user_id && s.user_id !== assignUserId) {
+              label += " (assigned to " + s.user + ")";
+            }
+
+            const opt = $("<option>").val(String(s.id)).text(label);
+
+            if (s.user_id && s.user_id !== assignUserId) {
+              opt.prop("disabled", true);
+            }
+
+            $sel.append(opt);
+          });
+
+          // find current user details
+          const u =
+            usersCache.find(function (x) {
+              return x.id === assignUserId;
+            }) || {};
+
+          $("#am-userline").text(
+            (u.name || "User #" + assignUserId) +
+              (u.email ? " — " + u.email : "")
+          );
+
+          if (u.store_id) $sel.val(String(u.store_id));
+
+          // simple search filter logic
+          $("#am-store-filter")
+            .off("input")
+            .on("input", function () {
+              const q = $(this).val().toLowerCase();
+              $sel.find("option").each(function () {
+                if (!this.value) return; // skip placeholder
+                const txt = $(this).text().toLowerCase();
+                $(this).toggle(txt.indexOf(q) !== -1);
+              });
+            });
+
+          $("#assign-modal").fadeIn(120);
+        }
+      );
+    });
+
+    $("#am-cancel")
+      .off("click")
+      .on("click", function () {
+        $("#assign-modal").fadeOut(120);
+      });
+
+    $("#am-save")
+      .off("click")
+      .on("click", function () {
+        var val = $("#am-store").val();
+        var storeId = val ? parseInt(val, 10) : 0;
+
+        if (!storeId) {
+          alert("Please select a store before saving.");
+          return;
+        }
+
+        $("#am-save").prop("disabled", true).text("Saving…");
+
+        // ✅ Assign user to the selected store (this is your supported route)
+        $.ajax({
+          url: (WCSSM.rest || "/wp-json/wcss/v1/") + "stores/" + storeId,
+          method: "PUT",
+          headers: {
+            "X-WP-Nonce": WCSSM.nonce,
+            "Content-Type": "application/json",
+          },
+          data: JSON.stringify({ user_id: assignUserId }),
+        })
+          .done(function () {
+            $("#assign-modal").fadeOut(120);
+            flash("Assignment saved.", true);
+            loadUsers(); // refresh the users grid to reflect store column
+          })
+          .fail(function (x) {
+            alert(
+              x.responseJSON?.message ||
+                x.statusText ||
+                "Failed to assign store."
+            );
+          })
+          .always(function () {
+            $("#am-save").prop("disabled", false).text("Save");
+          });
+      });
+
+    // $("#am-save")
+    //   .off("click")
+    //   .on("click", function () {
+    //     const val = $("#am-store").val();
+    //     const storeId = val ? parseInt(val, 10) : 0;
+
+    //     if (!storeId) {
+    //       alert("Please select a store before saving.");
+    //       return;
+    //     }
+
+    //     $("#am-save").prop("disabled", true).text("Saving…");
+    //     $.ajax({
+    //       url: (WCSSM.rest || "/wp-json/wcss/v1/") + "stores/" + storeId,
+    //       // url:
+    //       //   (WCSSM.rest || "/wp-json/wcss/v1/") +
+    //       //   "users/" +
+    //       //   assignUserId +
+    //       //   "/store",
+    //       method: "POST",
+    //       headers: {
+    //         "X-WP-Nonce": WCSSM.nonce,
+    //         "Content-Type": "application/json",
+    //       },
+    //       data: JSON.stringify({ store_id: storeId }),
+    //     })
+    //       .done(function () {
+    //         $("#assign-modal").fadeOut(120);
+    //         flash("Assignment saved.", true);
+    //         loadUsers();
+    //       })
+    //       .fail(function (x) {
+    //         alert(
+    //           x.responseJSON?.message ||
+    //             x.statusText ||
+    //             "Failed to assign store."
+    //         );
+    //       })
+    //       .always(function () {
+    //         $("#am-save").prop("disabled", false).text("Save");
+    //       });
+    //   });
+
+    // initial load
+    $.when(loadStores()).always(loadUsers);
+  };
+})(jQuery);
