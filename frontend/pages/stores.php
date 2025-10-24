@@ -16,7 +16,7 @@
 
   <div class="wcssm-header">
     <h1>Stores</h1>
-    <a class="btn btn-primary" href="<?php echo esc_url( home_url('/manager/stores/create') ); ?>">+ Add Store</a>
+    <a class="btn btn-primary" href="<?php echo esc_url( home_url('/manager/stores/create') ); ?>">+ Create Store</a>
   </div>
 
   <div class="toolbar">

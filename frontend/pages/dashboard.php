@@ -2,12 +2,15 @@
 <div class="wcssm-wrap">
   <?php include WCSS_DIR . 'frontend/pages/partials/manager-nav.php'; ?>
 
+
   <div class="wcssm-header">
-    <h1>Dashboard</h1>
-    <div id="wcssm-dashboard">
-      <button id="dash-refresh" class="btn btn-light">Refresh</button>
-    </div>
+  <h1>Dashboard</h1>
+  <div id="wcssm-dashboard">
+    <button id="dash-refresh" class="btn btn-light">Refresh</button>
+    <button id="dash-export-csv" class="btn btn-light">Export CSV</button>
+    <button id="dash-export-pdf" class="btn btn-light">Export PDF</button>
   </div>
+</div>
 
   <div id="wcssm-flash" class="flash" style="display:none"></div>
 

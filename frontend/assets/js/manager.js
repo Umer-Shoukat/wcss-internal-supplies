@@ -782,15 +782,21 @@
     });
 
     $btn.off("click").on("click", function () {
+      console.log("btn clicked");
+
       const payload = {
-        name: val("s-name"),
-        code: val("s-code"),
-        city: val("s-city"),
-        state: val("s-state"),
-        quota: val("s-quota"),
-        budget: val("s-budget"),
+        name: $("#s-name").val(),
+        code: $("#s-code").val(),
+        city: $("#s-city").val(),
+        state: $("#s-state").val(),
+        address: $("#s-address").val(),
+        phone: $("#s-phone").val(),
+        open_hours: $("#s-hours").val(),
+        quota: parseInt($("#s-quota").val(), 10) || 0,
+        budget: parseFloat($("#s-budget").val()) || 0,
         user_id: parseInt($("#s-user").val(), 10) || 0,
       };
+
       console.log("step 1");
       // Required fields (match server-side)
       if (!payload.name) return toast("Name is required", false);
@@ -798,8 +804,9 @@
       if (!payload.quota) return toast("Quota is required", false);
       if (!payload.budget) return toast("Budget is required", false);
       if (!payload.user_id) return toast("Select a Store Employee.", false);
-
-      console.log("step 2");
+      if (!payload.address) return toast("Address is required", false);
+      if (!payload.phone) return toast("Phone number is required", false);
+      if (!payload.open_hours) return toast("Open hours are required", false);
 
       // If you also want these required on the front end:
       // if (!payload.city)  return toast("City is required", false);
@@ -909,28 +916,13 @@
         $("#s-quota").val(s.quota ?? "");
         $("#s-budget").val(s.budget ?? "");
 
-        // rebuild the user dropdown
-        // $sel.empty();
-        // $sel.append($("<option>").val("").text("Select a Store Employee"));
-        // users.forEach(function (u) {
-        //   $sel.append(
-        //     $("<option>")
-        //       .val(u.id)
-        //       .text(u.name + (u.email ? " — " + u.email : ""))
-        //   );
-        // });
+        $("#s-address").val(s.address || "");
+        $("#s-phone").val(s.phone || "");
+        $("#s-hours").val(s.open_hours || "");
 
         // rebuild dropdown
         $sel.empty();
         $sel.append(jQuery("<option>").val("").text("Select a Store Employee"));
-        // add available (unassigned) users
-        // users.forEach(function (u) {
-        //   $sel.append(
-        //     jQuery("<option>")
-        //       .val(String(u.id))
-        //       .text(u.name + (u.email ? " — " + u.email : ""))
-        //   );
-        // });
 
         users.forEach(function (u) {
           var label =
@@ -938,25 +930,6 @@
           if (u.current) label += " (current)";
           $sel.append($("<option>").val(String(u.id)).text(label));
         });
-
-        // ensure currently assigned user appears & is pre-selected
-
-        // const curId = s.user_id ? String(s.user_id) : "";
-        // console.log(curId);
-
-        // if (curId) {
-        //   if (!$sel.find('option[value="' + curId + '"]').length) {
-        //     // inject current assigned user if not in the unassigned list
-        //     const label =
-        //       (s.user_name || "User #" + curId) +
-        //       (s.user_email ? " — " + s.user_email : "") +
-        //       " (current)";
-        //     $sel.append($("<option>").val(curId).text(label));
-        //   }
-        //   $sel.val(curId);
-        // }
-
-        // ensure current assigned user is present and selected
 
         // Prefer numeric s.user_id, otherwise match by email from users list
         let curIdNum = 0;
@@ -1012,8 +985,10 @@
           state: $("#s-state").val(),
           quota: $("#s-quota").val(),
           budget: $("#s-budget").val(),
-          // user_id: parseInt($("#s-user").val(), 10) || 0,
           user_id: Number.isInteger(userId) && userId > 0 ? userId : 0,
+          address: $("#s-address").val(),
+          phone: $("#s-phone").val(),
+          open_hours: $("#s-hours").val(),
         };
 
         if (!body.name) return toast("Store name is required", false);
@@ -1021,6 +996,9 @@
         if (!body.quota) return toast("Store quota is required", false);
         if (!body.budget) return toast("Store budget is required", false);
         if (!body.user_id) return toast("Store employee is required", false);
+        if (!body.address) return toast("Address is required", false);
+        if (!body.phone) return toast("Phone number is required", false);
+        if (!body.open_hours) return toast("Open hours are required", false);
 
         toast("Saving…");
         $.ajax({
@@ -1622,7 +1600,6 @@
 })(jQuery);
 
 //dashboard and reporting
-
 (function ($) {
   // ===== Dashboard =====
   (function ($) {
@@ -1845,6 +1822,37 @@
       }
 
       $("#dash-refresh").off("click").on("click", load);
+
+      $("#dash-export-csv")
+        .off("click")
+        .on("click", function () {
+          const ym = WCSSM.month
+            ? "month=" + encodeURIComponent(WCSSM.month) + "&"
+            : "";
+          const url =
+            (WCSSM.rest || "/wp-json/wcss/v1/") +
+            "reports/overview.csv?" +
+            ym +
+            "_dl=1&_wpnonce=" +
+            encodeURIComponent(WCSSM.nonce);
+          window.location = url;
+        });
+
+      $("#dash-export-pdf")
+        .off("click")
+        .on("click", function () {
+          const ym = WCSSM.month
+            ? "month=" + encodeURIComponent(WCSSM.month) + "&"
+            : "";
+          const url =
+            (WCSSM.rest || "/wp-json/wcss/v1/") +
+            "reports/overview.pdf?" +
+            ym +
+            "_dl=1&_wpnonce=" +
+            encodeURIComponent(WCSSM.nonce);
+          window.location = url;
+        });
+
       load();
     };
   })(jQuery);

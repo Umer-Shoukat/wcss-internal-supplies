@@ -130,7 +130,7 @@ class WCSS_REST_Stores {
         if ( ! $p || $p->post_type !== 'store_location' ) return new WP_Error('not_found','Store not found',[ 'status'=>404 ]);
         return rest_ensure_response( $this->dto( $p ) );
     }
-    public function create( WP_REST_Request $req ) {
+    public function create_old( WP_REST_Request $req ) {
         // ——— Sanitize + trim
         $name  = trim( (string) $req->get_param('name') );
         $code  = trim( (string) $req->get_param('code') );
@@ -241,7 +241,93 @@ class WCSS_REST_Stores {
         return rest_ensure_response( $this->dto( get_post( $post_id ) ) );
     }
 
-    public function update( WP_REST_Request $req ) {
+    public function create( WP_REST_Request $req ) {
+        // ---- required basics (unchanged) ----
+        $name  = trim( (string) $req->get_param('name') );
+        $code  = trim( (string) $req->get_param('code') );
+        $city  = trim( (string) $req->get_param('city') );
+        $state = trim( (string) $req->get_param('state') );
+    
+        if ( $name === '' || $code === '' ) {
+            return new WP_Error('wcss_store_bad_input','Name and Code are required.', [ 'status'=>400 ]);
+        }
+    
+        $quota  = $req->get_param('quota');
+        $budget = $req->get_param('budget');
+    
+        if ($quota !== null && $quota !== '' && (!is_numeric($quota) || (int)$quota < 0)) {
+            return new WP_Error('wcss_store_bad_quota','Quota must be a non-negative integer.', [ 'status'=>400 ]);
+        }
+        if ($budget !== null && $budget !== '' && (!is_numeric($budget) || (float)$budget < 0)) {
+            return new WP_Error('wcss_store_bad_budget','Budget must be a non-negative number.', [ 'status'=>400 ]);
+        }
+    
+        // ---- NEW: delivery/contact fields ----
+        $address = (string) $req->get_param('address');
+        $phone   = (string) $req->get_param('phone');
+        $hours   = (string) $req->get_param('open_hours');
+    
+        // ---- unique code check (unchanged) ----
+        $exists = get_posts([
+            'post_type'      => 'store_location',
+            'post_status'    => 'any',
+            'meta_key'       => '_store_code',
+            'meta_value'     => $code,
+            'fields'         => 'ids',
+            'posts_per_page' => 1,
+            'no_found_rows'  => true,
+            'suppress_filters' => true,
+        ]);
+        if ( ! empty($exists) ) {
+            return new WP_Error('wcss_store_code_exists','A store with this code already exists.', [ 'status'=>409 ]);
+        }
+    
+        // ---- create post ----
+        $post_id = wp_insert_post([
+            'post_type'   => 'store_location',
+            'post_title'  => sanitize_text_field($name),
+            'post_status' => 'publish',
+        ], true );
+        if ( is_wp_error($post_id) ) return $post_id;
+    
+        // Resolve meta keys from CPT (with safe fallbacks)
+        $META_CODE   = defined('WCSS_Store_CPT::META_CODE')   ? WCSS_Store_CPT::META_CODE   : '_store_code';
+        $META_CITY   = defined('WCSS_Store_CPT::META_CITY')   ? WCSS_Store_CPT::META_CITY   : '_store_city';
+        $META_STATE  = defined('WCSS_Store_CPT::META_STATE')  ? WCSS_Store_CPT::META_STATE  : '_store_state';
+        $META_QUOTA  = defined('WCSS_Store_CPT::META_QUOTA')  ? WCSS_Store_CPT::META_QUOTA  : '_store_quota';
+        $META_BUDGET = defined('WCSS_Store_CPT::META_BUDGET') ? WCSS_Store_CPT::META_BUDGET : '_store_budget';
+        $META_ADDR   = defined('WCSS_Store_CPT::META_ADDR')   ? WCSS_Store_CPT::META_ADDR   : '_wcss_store_address';
+        $META_PHONE  = defined('WCSS_Store_CPT::META_PHONE')  ? WCSS_Store_CPT::META_PHONE  : '_wcss_store_phone';
+        $META_HOURS  = defined('WCSS_Store_CPT::META_HOURS')  ? WCSS_Store_CPT::META_HOURS  : '_wcss_open_hours';
+    
+        // base meta
+        update_post_meta( $post_id, $META_CODE,  sanitize_text_field($code) );
+        update_post_meta( $post_id, $META_CITY,  sanitize_text_field($city) );
+        update_post_meta( $post_id, $META_STATE, sanitize_text_field($state) );
+        if ($quota  !== null && $quota  !== '') update_post_meta( $post_id, $META_QUOTA,  (int)$quota );
+        if ($budget !== null && $budget !== '') update_post_meta( $post_id, $META_BUDGET, wc_format_decimal($budget) );
+    
+        // NEW fields
+        if ($address !== '') update_post_meta( $post_id, $META_ADDR,  wp_kses_post($address) );
+        if ($phone   !== '') update_post_meta( $post_id, $META_PHONE, sanitize_text_field($phone) );
+        if ($hours   !== '') update_post_meta( $post_id, $META_HOURS, sanitize_textarea_field($hours) );
+    
+        // ---- user assignment (unchanged) ----
+        $uid = (int) $req->get_param('user_id');
+        if ( $uid <= 0 ) {
+            return new WP_Error('wcss_store_user_required','A Store Employee must be assigned.', [ 'status'=>400 ]);
+        }
+        $existing_store = (int) get_user_meta($uid, '_wcss_store_id', true);
+        if ( $existing_store && get_post_status($existing_store) ) {
+            $store_title = get_the_title($existing_store) ?: "#{$existing_store}";
+            return new WP_Error('wcss_user_already_assigned',"This user is already assigned to store {$store_title}. Each user can belong to only one store.",[ 'status'=>400 ]);
+        }
+        update_user_meta( $uid, '_wcss_store_id', $post_id );
+    
+        return rest_ensure_response( $this->dto( get_post($post_id) ) );
+    }
+
+    public function update_old( WP_REST_Request $req ) {
         $id = (int) $req['id'];
         $p  = get_post( $id );
         if ( ! $p || $p->post_type !== 'store_location' ) {
@@ -366,6 +452,68 @@ class WCSS_REST_Stores {
         return rest_ensure_response( $this->dto( get_post( $id ) ) );
     }
 
+    public function update( WP_REST_Request $req ) {
+        $id = (int) $req['id'];
+        $p  = get_post( $id );
+        if ( ! $p || $p->post_type !== 'store_location' ) {
+            return new WP_Error('not_found','Store not found',[ 'status'=>404 ]);
+        }
+    
+        $body = $req->get_json_params() ?: [];
+    
+        $name    = isset($body['name'])    ? sanitize_text_field($body['name'])   : '';
+        $user_id = isset($body['user_id']) ? (int)$body['user_id']                : 0;
+    
+        if ( $name === '' )   return new WP_Error('wcss_store_name_required','Store name is required.',[ 'status'=>400 ]);
+        if ( $user_id <= 0 )  return new WP_Error('wcss_store_user_required','A Store Employee must be assigned.',[ 'status'=>400 ]);
+    
+        wp_update_post([ 'ID'=>$id, 'post_title'=>$name ]);
+    
+        // Resolve meta keys (same shims as in create)
+        $META_CODE   = defined('WCSS_Store_CPT::META_CODE')   ? WCSS_Store_CPT::META_CODE   : '_store_code';
+        $META_CITY   = defined('WCSS_Store_CPT::META_CITY')   ? WCSS_Store_CPT::META_CITY   : '_store_city';
+        $META_STATE  = defined('WCSS_Store_CPT::META_STATE')  ? WCSS_Store_CPT::META_STATE  : '_store_state';
+        $META_QUOTA  = defined('WCSS_Store_CPT::META_QUOTA')  ? WCSS_Store_CPT::META_QUOTA  : '_store_quota';
+        $META_BUDGET = defined('WCSS_Store_CPT::META_BUDGET') ? WCSS_Store_CPT::META_BUDGET : '_store_budget';
+        $META_ADDR   = defined('WCSS_Store_CPT::META_ADDR')   ? WCSS_Store_CPT::META_ADDR   : '_wcss_store_address';
+        $META_PHONE  = defined('WCSS_Store_CPT::META_PHONE')  ? WCSS_Store_CPT::META_PHONE  : '_wcss_store_phone';
+        $META_HOURS  = defined('WCSS_Store_CPT::META_HOURS')  ? WCSS_Store_CPT::META_HOURS  : '_wcss_open_hours';
+    
+        if ( array_key_exists('code',   $body) ) update_post_meta( $id, $META_CODE,   sanitize_text_field((string)$body['code']) );
+        if ( array_key_exists('city',   $body) ) update_post_meta( $id, $META_CITY,   sanitize_text_field((string)$body['city']) );
+        if ( array_key_exists('state',  $body) ) update_post_meta( $id, $META_STATE,  sanitize_text_field((string)$body['state']) );
+        if ( array_key_exists('quota',  $body) ) update_post_meta( $id, $META_QUOTA,  (int)$body['quota'] );
+        if ( array_key_exists('budget', $body) ) update_post_meta( $id, $META_BUDGET, wc_format_decimal($body['budget']) );
+    
+        // NEW fields
+        if ( array_key_exists('address',    $body) ) update_post_meta( $id, $META_ADDR,  wp_kses_post((string)$body['address']) );
+        if ( array_key_exists('phone',      $body) ) update_post_meta( $id, $META_PHONE, sanitize_text_field((string)$body['phone']) );
+        if ( array_key_exists('open_hours', $body) ) update_post_meta( $id, $META_HOURS, sanitize_textarea_field((string)$body['open_hours']) );
+    
+        // one-store-per-user guard (unchanged)
+        $existing_store = (int) get_user_meta( $user_id, '_wcss_store_id', true );
+        if ( $existing_store && $existing_store !== $id && get_post_status($existing_store) ) {
+            $store_title = get_the_title($existing_store) ?: "#{$existing_store}";
+            return new WP_Error('wcss_user_already_assigned',"This user is already assigned to store {$store_title}. Each user can belong to only one store.",[ 'status'=>400 ]);
+        }
+    
+        // unassign other users from this store
+        $prev_users = get_users([
+            'meta_key'   => '_wcss_store_id',
+            'meta_value' => $id,
+            'fields'     => [ 'ID' ],
+            'number'     => 2,
+        ]);
+        foreach ( $prev_users as $u ) {
+            if ( (int)$u->ID !== $user_id ) delete_user_meta( $u->ID, '_wcss_store_id' );
+        }
+    
+        // assign selected user
+        update_user_meta( $user_id, '_wcss_store_id', $id );
+    
+        return rest_ensure_response( $this->dto( get_post($id) ) );
+    }
+
     public function delete( WP_REST_Request $req ) {
         $id = (int) $req['id'];
         $p  = get_post( $id );
@@ -398,7 +546,7 @@ class WCSS_REST_Stores {
         ]);
     }
 
-    private function dto( WP_Post $p ): array {
+    private function dto_old( WP_Post $p ): array {
         // Prefer CPT canonical keys, fall back to legacy to avoid breaking older code
         $code   = get_post_meta( $p->ID, WCSS_Store_CPT::META_CODE,   true );
         if ( $code === '' )   { $code   = get_post_meta( $p->ID, '_store_code',   true ); }
@@ -438,6 +586,55 @@ class WCSS_REST_Stores {
             'user_id'    => $user_id,
             'user_name'  => $user ? ( $user->display_name ?: $user->user_login ) : '',
             'user_email' => $user ? $user->user_email : '',
+        ];
+    }
+
+    private function dto( WP_Post $p ): array {
+        // resolve keys
+        $META_CODE   = defined('WCSS_Store_CPT::META_CODE')   ? WCSS_Store_CPT::META_CODE   : '_store_code';
+        $META_CITY   = defined('WCSS_Store_CPT::META_CITY')   ? WCSS_Store_CPT::META_CITY   : '_store_city';
+        $META_STATE  = defined('WCSS_Store_CPT::META_STATE')  ? WCSS_Store_CPT::META_STATE  : '_store_state';
+        $META_QUOTA  = defined('WCSS_Store_CPT::META_QUOTA')  ? WCSS_Store_CPT::META_QUOTA  : '_store_quota';
+        $META_BUDGET = defined('WCSS_Store_CPT::META_BUDGET') ? WCSS_Store_CPT::META_BUDGET : '_store_budget';
+        $META_ADDR   = defined('WCSS_Store_CPT::META_ADDR')   ? WCSS_Store_CPT::META_ADDR   : '_wcss_store_address';
+        $META_PHONE  = defined('WCSS_Store_CPT::META_PHONE')  ? WCSS_Store_CPT::META_PHONE  : '_wcss_store_phone';
+        $META_HOURS  = defined('WCSS_Store_CPT::META_HOURS')  ? WCSS_Store_CPT::META_HOURS  : '_wcss_open_hours';
+    
+        $code   = get_post_meta( $p->ID, $META_CODE,   true );
+        $city   = get_post_meta( $p->ID, $META_CITY,   true );
+        $state  = get_post_meta( $p->ID, $META_STATE,  true );
+        $quota  = get_post_meta( $p->ID, $META_QUOTA,  true );
+        $budget = get_post_meta( $p->ID, $META_BUDGET, true );
+        $addr   = get_post_meta( $p->ID, $META_ADDR,   true );
+        $phone  = get_post_meta( $p->ID, $META_PHONE,  true );
+        $hours  = get_post_meta( $p->ID, $META_HOURS,  true );
+    
+        $assigned = get_users([
+            'meta_key'   => '_wcss_store_id',
+            'meta_value' => $p->ID,
+            'fields'     => 'ID',
+            'number'     => 1,
+        ]);
+        $user_id = $assigned ? (int) $assigned[0] : 0;
+        $user    = $user_id ? get_userdata( $user_id ) : null;
+
+    
+        return [
+            'id'        => $p->ID,
+            'name'      => $p->post_title,
+            'code'      => (string) $code,
+            'city'      => (string) $city,
+            'state'     => (string) $state,
+            'quota'     => (int) $quota,
+            'budget'    => (float) $budget,
+            // NEW
+            'address'   => (string) $addr,
+            'phone'     => (string) $phone,
+            'open_hours'=> (string) $hours,
+            // assignment
+            'user_id'   => $user ? (int) $user->ID : 0,
+            'user_name'      => $user ? ($user->display_name ?: $user->user_login) : '',
+            'user_email'=> $user ? $user->user_email : '',
         ];
     }
 
@@ -596,4 +793,5 @@ class WCSS_REST_Stores {
         ]);
     }
 
+    
 }
