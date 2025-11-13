@@ -11,11 +11,16 @@
   <div class="wcssm-header">
     <h2>Products</h2>
 
-    <div>
-    <input id="p-search" class="input" placeholder="Search products…">
-    <button id="p-refresh" class="btn btn-light">Search</button>
-    <a class="btn btn-light" target="_blank" href="<?php echo admin_url('edit.php?post_type=product&page=product_exporter'); ?>">Export All (Woo)</a>
-  </div>
+    <div class="actions">
+      <input id="p-search" class="input" type="search" placeholder="Search name or SKU…" />
+      <button id="p-refresh" class="btn btn-light">Search</button>
+      <a
+        id="p-export"
+        class="btn btn-primary"
+        href="<?php echo esc_url( admin_url( 'edit.php?post_type=product&page=product_exporter' ) ); ?>"
+        target="_blank" rel="noopener"
+        >Export Products</a>
+    </div>
 
     <a href="<?php echo esc_url( home_url('/manager/products/create') ); ?>" class="btn btn-primary">+ Create Product</a>
   </div>

@@ -99,12 +99,15 @@ class WCSS_REST_Products {
             ],
         ]);
 
+        register_rest_route( 'wcss/v1', '/products/export', [
+            'methods'             => 'GET',
+            'permission_callback' => [ $this, 'can_manage' ], // the same guard you use for products list
+            'callback'            => [ $this, 'export_products_csv' ],
+        ] );
+  
 
     }
 
-    /* ---------- list/read (already present) ---------- */
-
-    // adding pagination to list product s
     public function list_products( WP_REST_Request $req ) {
         $page   = max( 1, (int) ($req->get_param('page') ?: 1) );
         $per    = min( 20, max( 100, (int) ($req->get_param('per_page') ?: 20) ) );
@@ -162,8 +165,6 @@ class WCSS_REST_Products {
         if ( ! $p ) return new WP_Error( 'not_found', 'Product not found', [ 'status' => 404 ] );
         return rest_ensure_response( $this->dto( $p ) );
     }
-
-    /* ---------- create/update/delete ---------- */
 
     public function delete( WP_REST_Request $req ) {
         $p = wc_get_product( (int) $req['id'] );
@@ -463,6 +464,284 @@ class WCSS_REST_Products {
     
         $t = get_term( (int) $res['term_id'] );
         return rest_ensure_response([ 'id'=>(int)$t->term_id, 'name'=>$t->name ]);
+    }
+
+    // product export method
+    public function export_products_csv_old( WP_REST_Request $req ) {
+        if ( ! class_exists( 'WC_Product_CSV_Exporter' ) ) {
+            return new WP_Error( 'wc_missing', 'WooCommerce exporter not available', [ 'status' => 500 ] );
+        }
+    
+        // Optional: reuse your list filter (search, status, etc.)
+        $search = sanitize_text_field( (string) $req->get_param( 'search' ) );
+    
+        // Load product IDs similarly to your list endpoint
+        $args = [
+            'limit'   => -1,
+            'return'  => 'ids',
+            'status'  => array_keys( wc_get_product_statuses() ),
+            'orderby' => 'date',
+            'order'   => 'DESC',
+        ];
+        if ( $search !== '' ) {
+            $args['s'] = $search; // Woo’s product query supports 's' for keyword
+        }
+    
+        $ids = wc_get_products( $args );
+    
+        // Build CSV using WooCommerce default exporter
+        $exporter = new WC_Product_CSV_Exporter();
+        $exporter->set_export_columns( array_keys( $exporter->get_default_column_names() ) );
+        $exporter->set_product_ids( $ids );
+        $exporter->generate();                         // generates into internal buffer
+        $csv = $exporter->get_csv_data();              // fetch CSV string
+    
+        $filename = 'products-' . date( 'Ymd-His' ) . '.csv';
+        $response = new WP_REST_Response( $csv, 200 );
+        $response->header( 'Content-Type', 'text/csv; charset=utf-8' );
+        $response->header( 'Content-Disposition', 'attachment; filename="' . $filename . '"' );
+        $response->header( 'Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0' );
+    
+        return $response;
+    }
+
+    public function export_products_csv_1( WP_REST_Request $req ) {
+        // WooCommerce + exporter available?
+        if ( ! function_exists( 'WC' ) ) {
+            return new WP_Error( 'wc_missing', 'WooCommerce not loaded', [ 'status' => 500 ] );
+        }
+        if ( ! class_exists( 'WC_Product_CSV_Exporter', false ) ) {
+            $file = trailingslashit( WC()->plugin_path() ) . 'includes/export/class-wc-product-csv-exporter.php';
+            if ( file_exists( $file ) ) {
+                require_once $file;
+            } else {
+                return new WP_Error( 'wc_missing', 'WooCommerce exporter not found', [ 'status' => 500 ] );
+            }
+        }
+    
+        // --- Collect product IDs (broad + version-safe) ---
+        $search = sanitize_text_field( (string) $req->get_param( 'search' ) );
+    
+        // statuses to include (fallback if WC helper missing)
+        $statuses = function_exists( 'wc_get_product_statuses' )
+            ? array_keys( wc_get_product_statuses() )           // publish,draft,pending,private
+            : array( 'publish', 'draft', 'pending', 'private' );
+    
+        $q_args = array(
+            'post_type'        => 'product',
+            'post_status'      => $statuses,
+            'posts_per_page'   => -1,
+            'fields'           => 'ids',
+            'orderby'          => 'ID',
+            'order'            => 'ASC',
+            'suppress_filters' => true,
+        );
+    
+        // Add simple title/content search
+        if ( $search !== '' ) {
+            $q_args['s'] = $search;
+    
+            // ALSO search by SKU (WP core doesn't search meta)
+            $q_args['meta_query'] = array(
+                'relation' => 'OR',
+                array(
+                    'key'     => '_sku',
+                    'value'   => $search,
+                    'compare' => 'LIKE',
+                ),
+            );
+        }
+    
+        $ids = get_posts( $q_args );
+    
+        // Optional fallback: if the catalog has only variations and no stand-alone products
+        if ( empty( $ids ) ) {
+            $var_ids = get_posts( array(
+                'post_type'        => 'product_variation',
+                'post_status'      => $statuses,
+                'posts_per_page'   => -1,
+                'fields'           => 'ids',
+                'orderby'          => 'ID',
+                'order'            => 'ASC',
+                'suppress_filters' => true,
+            ) );
+            // Exporter accepts product IDs; including variations is okay when include_variations=true
+            $ids = $var_ids;
+        }
+    
+        if ( empty( $ids ) ) {
+            return new WP_Error( 'wc_export_empty', 'No products match your filter.', [ 'status' => 200 ] );
+        }
+    
+        // --- Configure exporter ---
+        $exporter = new WC_Product_CSV_Exporter();
+    
+        if ( method_exists( $exporter, 'set_product_ids' ) ) {
+            $exporter->set_product_ids( array_map( 'intval', $ids ) );
+        }
+        if ( method_exists( $exporter, 'set_include_variations' ) ) {
+            $exporter->set_include_variations( true );
+        }
+        if ( method_exists( $exporter, 'set_export_columns' ) ) {
+            $exporter->set_export_columns( array_keys( $exporter->get_default_column_names() ) );
+        }
+        if ( method_exists( $exporter, 'set_filename' ) ) {
+            $exporter->set_filename( 'products-' . date( 'Ymd-His' ) . '.csv' );
+        }
+        if ( method_exists( $exporter, 'generate' ) ) {
+            $exporter->generate();
+        }
+    
+        // --- Obtain CSV content (version-safe) ---
+        $csv = '';
+        if ( method_exists( $exporter, 'get_csv' ) ) {
+            $csv = (string) $exporter->get_csv();
+        } else {
+            ob_start();
+            if ( method_exists( $exporter, 'export' ) ) {
+                $exporter->export();       // writes to output buffer
+            } elseif ( method_exists( $exporter, 'download' ) ) {
+                // 'download()' sends headers in some WC versions; last resort
+                $exporter->download();
+            }
+            $csv = (string) ob_get_clean();
+        }
+    
+        if ( $csv === '' ) {
+            return new WP_Error( 'wc_export_empty', 'Exporter returned no data.', [ 'status' => 500 ] );
+        }
+    
+        // Return as downloadable CSV
+        $filename = 'products-' . date( 'Ymd-His' ) . '.csv';
+        $resp = new WP_REST_Response( $csv, 200 );
+        $resp->header( 'Content-Type', 'text/csv; charset=utf-8' );
+        $resp->header( 'Content-Disposition', 'attachment; filename="' . $filename . '"' );
+        $resp->header( 'Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0' );
+        return $resp;
+    }
+
+    public function export_products_csv( WP_REST_Request $req ) {
+        // WooCommerce + exporter available?
+        if ( ! function_exists( 'WC' ) ) {
+            return new WP_Error( 'wc_missing', 'WooCommerce not loaded', [ 'status' => 500 ] );
+        }
+        if ( ! class_exists( 'WC_Product_CSV_Exporter', false ) ) {
+            $file = trailingslashit( WC()->plugin_path() ) . 'includes/export/class-wc-product-csv-exporter.php';
+            if ( file_exists( $file ) ) {
+                require_once $file;
+            } else {
+                return new WP_Error( 'wc_missing', 'WooCommerce exporter not found', [ 'status' => 500 ] );
+            }
+        }
+    
+                // --- Collect product IDs (robust) ---
+            $search = sanitize_text_field( (string) $req->get_param( 'search' ) );
+
+            // Allowed statuses (fallback if helper missing)
+            $statuses = function_exists( 'wc_get_product_statuses' )
+                ? array_keys( wc_get_product_statuses() )                 // publish,draft,pending,private
+                : array( 'publish', 'draft', 'pending', 'private' );
+
+            // 1) Try WooCommerce layer first (works even when HPOS / custom data stores are enabled)
+            $args = array(
+                'limit'   => -1,
+                'status'  => $statuses,
+                'return'  => 'ids',
+            );
+            if ( $search !== '' ) {
+                // wc_get_products supports a broad "search" (title/content) and exact SKU via "sku"
+                // We'll try both: exact SKU first, then broad search, then LIKE fallback (below).
+                $ids  = wc_get_products( array_merge( $args, array( 'sku' => $search ) ) );
+                $ids2 = wc_get_products( array_merge( $args, array( 'search' => $search ) ) );
+                $ids  = array_unique( array_merge( (array) $ids, (array) $ids2 ) );
+            } else {
+                $ids = wc_get_products( $args );
+            }
+
+            // 2) If still empty and we have a search term, do a direct SKU LIKE lookup (partial match)
+            if ( empty( $ids ) && $search !== '' ) {
+                global $wpdb;
+                $like = '%' . $wpdb->esc_like( $search ) . '%';
+                $ids_from_sku = $wpdb->get_col(
+                    $wpdb->prepare(
+                        "SELECT DISTINCT p.ID
+                        FROM {$wpdb->posts} p
+                        INNER JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID
+                        WHERE pm.meta_key = '_sku'
+                        AND pm.meta_value LIKE %s
+                        AND p.post_type IN ('product','product_variation')
+                        AND p.post_status IN (" . implode( ',', array_fill( 0, count( $statuses ), '%s' ) ) . ')',
+                        array_merge( array( $like ), $statuses )
+                    )
+                );
+                if ( $ids_from_sku ) {
+                    $ids = array_unique( array_merge( (array) $ids, array_map( 'intval', $ids_from_sku ) ) );
+                }
+            }
+
+
+            if ( empty( $ids ) ) {
+                $var_ids = wc_get_products( array(
+                    'type'    => array( 'variation' ),
+                    'limit'   => -1,
+                    'status'  => $statuses,
+                    'return'  => 'ids',
+                ) );
+                $ids = (array) $var_ids;
+            }
+            
+            $ids = array_values( array_unique( array_map( 'intval', (array) $ids ) ) );
+            if ( empty( $ids ) ) {
+                return new WP_Error( 'wc_export_empty', 'No products match your filter.', array( 'status' => 200 ) );
+            }
+
+            
+
+        // --- Configure exporter ---
+        $exporter = new WC_Product_CSV_Exporter();
+    
+        if ( method_exists( $exporter, 'set_product_ids' ) ) {
+            $exporter->set_product_ids( array_map( 'intval', $ids ) );
+        }
+        if ( method_exists( $exporter, 'set_include_variations' ) ) {
+            $exporter->set_include_variations( true );
+        }
+        if ( method_exists( $exporter, 'set_export_columns' ) ) {
+            $exporter->set_export_columns( array_keys( $exporter->get_default_column_names() ) );
+        }
+        if ( method_exists( $exporter, 'set_filename' ) ) {
+            $exporter->set_filename( 'products-' . date( 'Ymd-His' ) . '.csv' );
+        }
+        if ( method_exists( $exporter, 'generate' ) ) {
+            $exporter->generate();
+        }
+    
+        // --- Obtain CSV content (version-safe) ---
+        $csv = '';
+        if ( method_exists( $exporter, 'get_csv' ) ) {
+            $csv = (string) $exporter->get_csv();
+        } else {
+            ob_start();
+            if ( method_exists( $exporter, 'export' ) ) {
+                $exporter->export();       // writes to output buffer
+            } elseif ( method_exists( $exporter, 'download' ) ) {
+                // 'download()' sends headers in some WC versions; last resort
+                $exporter->download();
+            }
+            $csv = (string) ob_get_clean();
+        }
+    
+        if ( $csv === '' ) {
+            return new WP_Error( 'wc_export_empty', 'Exporter returned no data.', [ 'status' => 500 ] );
+        }
+    
+        // Return as downloadable CSV
+        $filename = 'products-' . date( 'Ymd-His' ) . '.csv';
+        $resp = new WP_REST_Response( $csv, 200 );
+        $resp->header( 'Content-Type', 'text/csv; charset=utf-8' );
+        $resp->header( 'Content-Disposition', 'attachment; filename="' . $filename . '"' );
+        $resp->header( 'Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0' );
+        return $resp;
     }
 
 

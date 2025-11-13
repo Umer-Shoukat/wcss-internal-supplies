@@ -347,7 +347,7 @@ body.admin-bar {
   grid-template-columns: 80px 1fr 140px 180px 120px 160px;
   gap: 8px;
   padding: 8px;
-  border-bottom: 1px solid #eef0f2;
+  border: 1px solid #dcdfe2;
 }
 .tablelike .row.head {
   font-weight: 600;

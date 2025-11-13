@@ -134,7 +134,18 @@
     const $search = $("#p-search");
     const $refresh = $("#p-refresh");
 
-    let state = { page: 1, per_page: 20, search: "" };
+    // let state = { page: 1, per_page: 20, search: "" };
+    const urlParams = new URLSearchParams(window.location.search);
+    let state = {
+      page:
+        parseInt(urlParams.get("page"), 10) > 0
+          ? parseInt(urlParams.get("page"), 10)
+          : 1,
+      per_page: 20,
+      total_pages: 1,
+      total: 0,
+      search: urlParams.get("search") || "",
+    };
 
     function render(items, meta) {
       const head = `
@@ -142,8 +153,18 @@
         <div>ID</div><div>Name</div><div>SKU</div><div>Vendor</div><div>Price</div><div>Actions</div>
       </div>`;
       const rows = (items || [])
-        .map(
-          (p) => `
+        .map((p) => {
+          const qsParts = [];
+          if (state.page && state.page > 1) {
+            qsParts.push("page=" + encodeURIComponent(state.page));
+          }
+          if (state.search) {
+            qsParts.push("search=" + encodeURIComponent(state.search));
+          }
+          const editUrl =
+            p.id + (qsParts.length ? "?" + qsParts.join("&") : "");
+
+          return `
       <div class="row">
         <div>#${p.id}</div>
         <div>${(p.name || "").replace(/</g, "&lt;")}</div>
@@ -154,13 +175,13 @@
         )}</div>
         <div>${p.price_html || p.price || ""}</div>
         <div class="actions">
-          <a class="btn btn-sm" href="edit/${p.id}">Edit</a>
+          <a class="btn btn-sm" href="edit/${editUrl}">Edit</a>
           <button class="btn btn-sm btn-danger delete-product" data-id="${
             p.id
           }">Delete</button>
         </div>
-      </div>`
-        )
+      </div>`;
+        })
         .join("");
 
       const pager = `
@@ -183,22 +204,73 @@
 
       // pager events
       $grid.find(".pager-prev").on("click", function () {
-        console.log("btn clicked ....  ");
+        e.preventDefault();
         if (state.page > 1) {
           state.page--;
+          syncQueryWithState();
           load();
         }
+
+        // console.log("btn clicked ....  ");
+        // if (state.page > 1) {
+        //   state.page--;
+        //   load();
+        // }
       });
 
       $grid.find(".pager-next").on("click", function () {
-        console.log("btn clicked ....  ");
-        if (state.page < meta.total_pages) {
+        e.preventDefault();
+        if (state.page < state.total_pages) {
           state.page++;
+          syncQueryWithState();
           load();
         }
+
+        // console.log("btn clicked ....  ");
+        // if (state.page < meta.total_pages) {
+        //   state.page++;
+        //   load();
+        // }
       });
 
-      // --- add near top of initProductsList() ---
+      // product export button module..
+
+      // inside window.initProductsList, after state/search handlers:
+      $("#p-export")
+        .off("click")
+        .on("click", function (e) {
+          e.preventDefault();
+
+          const qs = $.param({ search: state.search || "" });
+
+          fetch((WCSSM.rest || "/wp-json/wcss/v1/") + "products/export?" + qs, {
+            headers: { "X-WP-Nonce": WCSSM.nonce },
+          })
+            .then((r) => {
+              if (!r.ok) throw new Error("Export failed");
+              return r.blob();
+            })
+            .then((blob) => {
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download =
+                "products-" +
+                new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") +
+                ".csv";
+              document.body.appendChild(a);
+              a.click();
+              setTimeout(() => {
+                URL.revokeObjectURL(url);
+                a.remove();
+              }, 500);
+            })
+            .catch((err) => {
+              alert(err.message || "Export failed");
+            });
+        });
+
+      // product export button module..
 
       function flash(msg, ok = true) {
         const $f = $("#wcssm-flash");
@@ -261,18 +333,46 @@
         });
     }
 
+    function syncQueryWithState() {
+      const params = new URLSearchParams(window.location.search);
+
+      if (state.page && state.page > 1) {
+        params.set("page", String(state.page));
+      } else {
+        params.delete("page");
+      }
+
+      if (state.search) {
+        params.set("search", state.search);
+      } else {
+        params.delete("search");
+      }
+
+      const qs = params.toString();
+      const newUrl = window.location.pathname + (qs ? "?" + qs : "");
+
+      window.history.replaceState({}, "", newUrl);
+    }
+
     // search hooks (optional)
     if ($refresh.length)
       $refresh.on("click", function () {
         state.page = 1;
         state.search = $search.val() || "";
+        syncQueryWithState();
         load();
+
+        // state.page = 1;
+        // state.search = $search.val() || "";
+        // load();
       });
+
     if ($search.length)
       $search.on("keypress", function (e) {
         if (e.which === 13) {
           state.page = 1;
           state.search = $search.val() || "";
+          syncQueryWithState();
           load();
         }
       });
@@ -446,9 +546,23 @@
         })
           .done(function () {
             toast("✅ Saved!", true);
+            const params = new URLSearchParams(window.location.search);
+            const backParts = [];
+            const pg = params.get("page");
+            const srch = params.get("search");
+
+            if (pg) backParts.push("page=" + encodeURIComponent(pg));
+            if (srch) backParts.push("search=" + encodeURIComponent(srch));
+
+            let backUrl = (WCSSM.manager_base || "/manager/") + "products";
+            if (backParts.length) {
+              backUrl += "?" + backParts.join("&");
+            }
+
             setTimeout(function () {
-              window.location.href = managerBase() + "products";
-            }, 700);
+              // window.location.href = managerBase() + "products"
+              window.location.href = backUrl;
+            }, 500);
           })
           .fail(function (x) {
             toast("Error: " + (x.responseJSON?.message || x.statusText), false);
@@ -512,16 +626,16 @@
       $("#v-name").focus();
       return;
     }
-    if (!email) {
-      vendorToast("Email is required", false);
-      $("#v-email").focus();
-      return;
-    }
-    if (!emailRegex.test(email)) {
-      vendorToast("Please enter a valid email address", false);
-      $("#v-email").focus();
-      return;
-    }
+    // if (!email) {
+    //   vendorToast("Email is required", false);
+    //   $("#v-email").focus();
+    //   return;
+    // }
+    // if (!emailRegex.test(email)) {
+    //   vendorToast("Please enter a valid email address", false);
+    //   $("#v-email").focus();
+    //   return;
+    // }
     if (!phone) {
       vendorToast("Phone number is required", false);
       $("#v-phone").focus();

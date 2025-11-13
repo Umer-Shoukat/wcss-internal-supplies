@@ -122,7 +122,7 @@
     <div class="grid-2">
       <div>
         <label>Phone</label>
-        <input id="v-phone" class="input" placeholder="+1 555 123 4567">
+        <input id="v-phone" class="input" placeholder="+1 555 123 4567" required>
       </div>
       <div>
         <label>Address</label>
