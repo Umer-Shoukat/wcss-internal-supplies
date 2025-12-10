@@ -383,15 +383,15 @@ add_action( 'phpmailer_init', function ( $phpmailer ) {
         return;
     }
 
-    // ✅ Configure to your actual SMTP
+
     $phpmailer->isSMTP();
-    $phpmailer->Host       = 'smtp.yourhost.com';
+    $phpmailer->Host       = 'smtp.office365.com';
     $phpmailer->Port       = 587;
     $phpmailer->SMTPAuth   = true;
     $phpmailer->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
 
-    $phpmailer->Username   = 'no-reply@your-domain.com';
-    $phpmailer->Password   = 'your-strong-password';
+    $phpmailer->Username   = 'no-reply@ccsupplies.ca';
+    $phpmailer->Password   = '^xAyip@q]IAb0uLIHIVIWuckY6BP958od';
 
-    $phpmailer->setFrom( 'no-reply@your-domain.com', 'Internal Supply' );
+    $phpmailer->setFrom( 'no-reply@ccsupplies.ca', 'CC Internal Supply Store' );
 });

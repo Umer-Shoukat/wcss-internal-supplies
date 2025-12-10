@@ -34,13 +34,13 @@ class WCSS_Activator {
             'read' => true,
         ] );
 
-        // Supply admin: start with Shop Manager caps if available
-        $shop_manager = get_role( 'shop_manager' );
-        if ( $shop_manager ) {
-            add_role( 'supply_admin', __( 'Supply Admin', 'wcss' ), $shop_manager->capabilities );
-        } else {
-            add_role( 'supply_admin', __( 'Supply Admin', 'wcss' ), [ 'read' => true, 'manage_woocommerce' => true ] );
-        }
+        // // Supply admin: start with Shop Manager caps if available
+        // $shop_manager = get_role( 'shop_manager' );
+        // if ( $shop_manager ) {
+        //     add_role( 'supply_admin', __( 'Supply Admin', 'wcss' ), $shop_manager->capabilities );
+        // } else {
+        //     add_role( 'supply_admin', __( 'Supply Admin', 'wcss' ), [ 'read' => true, 'manage_woocommerce' => true ] );
+        // }
     }
 
     private static function maybe_create_tables() {
