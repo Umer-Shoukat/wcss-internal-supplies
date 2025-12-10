@@ -203,7 +203,7 @@
       console.log(preBtn);
 
       // pager events
-      $grid.find(".pager-prev").on("click", function () {
+      $grid.find(".pager-prev").on("click", function (e) {
         e.preventDefault();
         if (state.page > 1) {
           state.page--;
@@ -218,7 +218,7 @@
         // }
       });
 
-      $grid.find(".pager-next").on("click", function () {
+      $grid.find(".pager-next").on("click", function (e) {
         e.preventDefault();
         if (state.page < state.total_pages) {
           state.page++;
