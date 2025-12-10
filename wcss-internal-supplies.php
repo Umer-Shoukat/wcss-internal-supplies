@@ -374,3 +374,24 @@ add_shortcode( 'current_user_name', function() {
     }
     return '';
 });
+
+
+
+add_action( 'phpmailer_init', function ( $phpmailer ) {
+    // Only override if not already configured by another plugin
+    if ( ! $phpmailer instanceof PHPMailer\PHPMailer\PHPMailer ) {
+        return;
+    }
+
+    // ✅ Configure to your actual SMTP
+    $phpmailer->isSMTP();
+    $phpmailer->Host       = 'smtp.yourhost.com';
+    $phpmailer->Port       = 587;
+    $phpmailer->SMTPAuth   = true;
+    $phpmailer->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+
+    $phpmailer->Username   = 'no-reply@your-domain.com';
+    $phpmailer->Password   = 'your-strong-password';
+
+    $phpmailer->setFrom( 'no-reply@your-domain.com', 'Internal Supply' );
+});
