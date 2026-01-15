@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WCSS – Internal Supplies for WooCommerce
  * Description: Converts WooCommerce into an internal supplies portal with login-only ordering, monthly order quotas, budget enforcement, and approval workflow (scaffold).
- * Version:2.1.2
+ * Version:3.1.0
  * Author:  adex360 LTD
  * Text Domain: wcss
  * Domain Path: /languages
@@ -56,6 +56,8 @@ require_once WCSS_DIR . 'includes/rest/class-rest-ledger.php';
 require_once WCSS_DIR . 'includes/class-wcss-vendors.php';
 require_once WCSS_DIR . 'includes/rest/class-rest-vendors.php';
 require_once WCSS_DIR . 'includes/rest/class-rest-reports.php';
+require_once WCSS_DIR . 'includes/class-email-logger.php';
+require_once WCSS_DIR . 'includes/class-email-log-admin.php';
 
 
 
@@ -160,6 +162,7 @@ add_action( 'plugins_loaded', function() {
     // Admin settings UI
     if ( is_admin() ) {
         new WCSS_Admin_Settings();
+        new WCSS_Email_Log_Admin();
     }
     do_action( 'wcss_bootstrap' );
 
@@ -200,6 +203,9 @@ add_action( 'wcss_bootstrap', function () {
     new WCSS_Checkout_Guard();
 
 } );
+
+// Capture all outgoing emails via wp_mail for logging.
+add_filter( 'wp_mail', [ 'WCSS_Email_Logger', 'capture_wp_mail' ], 999, 1 );
 
 
 

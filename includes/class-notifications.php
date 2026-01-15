@@ -1,78 +1,5 @@
 <?php
 if ( ! defined( 'ABSPATH' ) ) { exit; }
-
-// class WCSS_Notifications {
-
-//     public function __construct() {
-//         // When a new order is created (our requisition submit)
-//         add_action( 'woocommerce_new_order', [ $this, 'notify_admin_on_submit' ], 20, 2 );
-
-//         // When status changes to approved/rejected
-//         add_action( 'woocommerce_order_status_changed', [ $this, 'notify_user_on_decision' ], 10, 4 );
-//     }
-
-//     /**
-//      * Admin notification when a requisition is submitted.
-//      * We piggyback Woo's built-in "New order" email so recipients come from Woo settings.
-//      */
-//     public function notify_admin_on_submit( $order_id, $order ) {
-//         if ( ! $order instanceof WC_Order ) {
-//             $order = wc_get_order( $order_id );
-//         }
-//         if ( ! $order ) return;
-
-//         // Only for our gateway (avoid emailing for other gateways)
-//         $pm = $order->get_payment_method();
-//         if ( $pm !== 'wcss_internal_requisition' ) {
-//             return;
-//         }
-
-//         // Trigger Woo's native New Order email
-//         $mailer = WC()->mailer();
-//         $emails = $mailer->get_emails();
-//         if ( isset( $emails['WC_Email_New_Order'] ) ) {
-//             $emails['WC_Email_New_Order']->trigger( $order_id );
-//         }
-//     }
-
-//     /**
-//      * Customer notification when an order is approved or rejected.
-//      */
-//     public function notify_user_on_decision( $order_id, $old_status, $new_status, $order ) {
-//         if ( ! $order instanceof WC_Order ) {
-//             $order = wc_get_order( $order_id );
-//         }
-//         if ( ! $order ) return;
-
-//         // Only act on our custom statuses
-//         if ( $new_status !== 'approved' && $new_status !== 'rejected' ) {
-//             return;
-//         }
-
-//         $to   = $order->get_billing_email();
-//         if ( ! $to ) return;
-
-//         $store_name = $order->get_meta( '_wcss_store_name' );
-//         $subject = ( $new_status === 'approved' )
-//             ? sprintf( __( 'Your requisition #%s has been APPROVED', 'wcss' ), $order->get_order_number() )
-//             : sprintf( __( 'Your requisition #%s has been REJECTED', 'wcss' ), $order->get_order_number() );
-
-//         $status_label = ( $new_status === 'approved' ) ? __( 'Approved', 'wcss' ) : __( 'Rejected', 'wcss' );
-//         $view_link    = $order->get_view_order_url();
-
-//         $lines = [];
-//         $lines[] = sprintf( __( 'Store: %s', 'wcss' ), $store_name ? $store_name : '-' );
-//         $lines[] = sprintf( __( 'Order: #%s', 'wcss' ), $order->get_order_number() );
-//         $lines[] = sprintf( __( 'Status: %s', 'wcss' ), $status_label );
-//         $lines[] = __( 'You can review this order here:', 'wcss' ) . ' ' . $view_link;
-
-//         $body = implode( "\n", $lines );
-
-//         // Use Woo's mailer so branding/templates apply
-//         wc_mail( $to, $subject, $body );
-//     }
-// }
-
 class WCSS_Notifications {
 
     public function __construct() {
@@ -94,51 +21,86 @@ class WCSS_Notifications {
     }
 
     /**
-     * Handle new order: notify store employee, supply manager, and vendors.
+     * Handle new order: notify store employee, supply managers, and vendors.
+     * Each recipient gets a separate email (no shared "To" list).
      */
     public function handle_new_order( $order_id, $order = null ) {
         $order = $order instanceof WC_Order ? $order : wc_get_order( $order_id );
-        if ( ! $order ) return;
+        if ( ! $order ) {
+            return;
+        }
 
-        $recipients = [];
+        $order_number = $order->get_order_number();
+        $status_label = wc_get_order_status_name( $order->get_status() );
 
         // 1) Store employee (based on _wcss_store_id meta)
         $store_employee_email = $this->get_store_employee_email_for_order( $order );
         if ( $store_employee_email ) {
-            $recipients[] = $store_employee_email;
+            $subject = sprintf(
+                '[Internal Supply] New order #%s for your store (%s)',
+                $order_number,
+                $status_label
+            );
+
+            $message = $this->build_new_order_email_body( $order, 'store_employee' );
+            $headers = [
+                'Content-Type: text/html; charset=UTF-8',
+                'X-WCSS-Context: wcss_new_order_store_employee',
+            ];
+
+            if ( function_exists( 'wc_mail' ) ) {
+                wc_mail( $store_employee_email, $subject, $message, $headers );
+            } else {
+                wp_mail( $store_employee_email, $subject, $message, $headers );
+            }
         }
 
-        // 2) Supply manager (global email(s))
-        $recipients = array_merge(
-            $recipients,
-            $this->get_supply_manager_emails()
-        );
+        // 2) Supply managers (shop managers)
+        $manager_emails = $this->get_supply_manager_emails();
+        if ( ! empty( $manager_emails ) ) {
+            $subject = sprintf(
+                '[Internal Supply] New order #%s placed (%s)',
+                $order_number,
+                $status_label
+            );
 
-        // 3) Vendors on this order
-        $recipients = array_merge(
-            $recipients,
-            $this->get_vendor_emails_for_order( $order )
-        );
+            $message = $this->build_new_order_email_body( $order, 'shop_manager' );
+            $headers = [
+                'Content-Type: text/html; charset=UTF-8',
+                'X-WCSS-Context: wcss_new_order_shop_manager',
+            ];
 
-        $recipients = array_unique( array_filter( $recipients ) );
-        if ( empty( $recipients ) ) {
-            return;
+            foreach ( array_unique( array_filter( $manager_emails ) ) as $email ) {
+                if ( function_exists( 'wc_mail' ) ) {
+                    wc_mail( $email, $subject, $message, $headers );
+                } else {
+                    wp_mail( $email, $subject, $message, $headers );
+                }
+            }
         }
 
-        $subject = sprintf(
-            '[Internal Supply] New order #%s (%s)',
-            $order->get_order_number(),
-            wc_get_order_status_name( $order->get_status() )
-        );
+        // 3) Vendors on this order (generic new-order email, one per vendor address)
+        $vendor_emails = $this->get_vendor_emails_for_order( $order );
+        if ( ! empty( $vendor_emails ) ) {
+            $subject = sprintf(
+                '[Internal Supply] New order #%s (%s)',
+                $order_number,
+                $status_label
+            );
 
-        $message = $this->build_new_order_email_body( $order );
-        $headers = [ 'Content-Type: text/html; charset=UTF-8' ];
+            $message = $this->build_new_order_email_body( $order, 'vendor' );
+            $headers = [
+                'Content-Type: text/html; charset=UTF-8',
+                'X-WCSS-Context: wcss_new_order_vendor',
+            ];
 
-        // Use WooCommerce mail helper so it respects WC email settings
-        if ( function_exists( 'wc_mail' ) ) {
-            wc_mail( $recipients, $subject, $message, $headers );
-        } else {
-            wp_mail( $recipients, $subject, $message, $headers );
+            foreach ( array_unique( array_filter( $vendor_emails ) ) as $email ) {
+                if ( function_exists( 'wc_mail' ) ) {
+                    wc_mail( $email, $subject, $message, $headers );
+                } else {
+                    wp_mail( $email, $subject, $message, $headers );
+                }
+            }
         }
     }
 
@@ -188,7 +150,10 @@ class WCSS_Notifications {
             $old_status,
             $new_status
         );
-        $headers = [ 'Content-Type: text/html; charset=UTF-8' ];
+        $headers = [
+            'Content-Type: text/html; charset=UTF-8',
+            'X-WCSS-Context: wcss_order_status_change',
+        ];
 
         if ( function_exists( 'wc_mail' ) ) {
             wc_mail( $recipients, $subject, $message, $headers );
@@ -226,7 +191,7 @@ class WCSS_Notifications {
      * - try option 'wcss_supply_manager_emails'
      * - fallback to site admin_email
      */
-    private function get_supply_manager_emails(): array {
+    private function get_supply_manager_emails_old(): array {
         $emails = [];
 
         $opt = get_option( 'wcss_supply_manager_emails', '' );
@@ -247,6 +212,30 @@ class WCSS_Notifications {
 
         return array_unique( array_filter( $emails ) );
     }
+
+
+        /**
+     * Supply manager emails.
+     * Gets emails of all users with the "shop_manager" role.
+     */
+    
+    private function get_supply_manager_emails(): array {
+        $emails = [];
+
+        $users = get_users( [
+            'role'   => 'shop_manager',
+            'fields' => [ 'user_email' ],
+        ] );
+
+        foreach ( $users as $user ) {
+            if ( ! empty( $user->user_email ) && is_email( $user->user_email ) ) {
+                $emails[] = $user->user_email;
+            }
+        }
+
+        return array_unique( array_filter( $emails ) );
+    }
+
 
     /**
      * Collect vendor emails for all vendors who appear in line items.
@@ -275,50 +264,106 @@ class WCSS_Notifications {
 
     /**
      * Simple HTML email for NEW order.
+     *
+     * @param WC_Order $order
+     * @param string   $audience store_employee|shop_manager|vendor|generic
      */
-    private function build_new_order_email_body( WC_Order $order ): string {
+    private function build_new_order_email_body( WC_Order $order, string $audience = 'generic' ): string {
         $store_id   = (int) $order->get_meta( '_wcss_store_id' );
         $store_name = $store_id ? get_the_title( $store_id ) : '';
         $store_code = $store_id ? get_post_meta( $store_id, WCSS_Store_CPT::META_CODE, true ) : '';
         $store_city = $store_id ? get_post_meta( $store_id, WCSS_Store_CPT::META_CITY, true ) : '';
 
+        $heading = sprintf(
+            'New order #%s',
+            $order->get_order_number()
+        );
+
+        if ( 'store_employee' === $audience ) {
+            $intro = __( 'A new order has been placed for your store in the Internal Supply portal.', 'wcss' );
+        } elseif ( 'shop_manager' === $audience ) {
+            $intro = __( 'A new order has been placed in the Internal Supply portal.', 'wcss' );
+        } elseif ( 'vendor' === $audience ) {
+            $intro = __( 'A new order has been placed that includes items from your catalog.', 'wcss' );
+        } else {
+            $intro = __( 'A new order has been placed.', 'wcss' );
+        }
+
         ob_start();
         ?>
-        <h2>New order received: #<?php echo esc_html( $order->get_order_number() ); ?></h2>
-        <p>
-            <strong>Date:</strong> <?php echo esc_html( $order->get_date_created() ? $order->get_date_created()->date_i18n( 'Y-m-d H:i' ) : '' ); ?><br>
-            <strong>Status:</strong> <?php echo esc_html( wc_get_order_status_name( $order->get_status() ) ); ?><br>
-            <strong>Total:</strong> <?php echo wp_kses_post( $order->get_formatted_order_total() ); ?><br>
-            <strong>Customer:</strong> <?php echo esc_html( $order->get_billing_email() ); ?>
-        </p>
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:#f5f5f7; padding:20px 0;">
+            <tr>
+                <td align="center">
+                    <table width="600" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #e2e2e7;">
+                        <tr>
+                            <td style="background:#111827;color:#ffffff;padding:16px 24px;font-size:18px;font-weight:600;">
+                                <?php echo esc_html( $heading ); ?>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding:16px 24px;font-size:14px;line-height:1.5;color:#111827;">
+                                <p style="margin:0 0 8px 0;"><?php echo esc_html( $intro ); ?></p>
+                                <p style="margin:0;">
+                                    <strong><?php esc_html_e( 'Date:', 'wcss' ); ?></strong>
+                                    <?php echo esc_html( $order->get_date_created() ? $order->get_date_created()->date_i18n( 'Y-m-d H:i' ) : '' ); ?><br>
+                                    <strong><?php esc_html_e( 'Status:', 'wcss' ); ?></strong>
+                                    <?php echo esc_html( wc_get_order_status_name( $order->get_status() ) ); ?><br>
+                                    <strong><?php esc_html_e( 'Total:', 'wcss' ); ?></strong>
+                                    <?php echo wp_kses_post( $order->get_formatted_order_total() ); ?><br>
+                                    <strong><?php esc_html_e( 'Customer:', 'wcss' ); ?></strong>
+                                    <?php echo esc_html( $order->get_billing_email() ); ?>
+                                </p>
+                            </td>
+                        </tr>
 
-        <?php if ( $store_id ) : ?>
-            <h3>Store</h3>
-            <p>
-                <strong>Name:</strong> <?php echo esc_html( $store_name ?: '#' . $store_id ); ?><br>
-                <strong>Code:</strong> <?php echo esc_html( $store_code ); ?><br>
-                <strong>City:</strong> <?php echo esc_html( $store_city ); ?>
-            </p>
-        <?php endif; ?>
+                        <?php if ( $store_id ) : ?>
+                        <tr>
+                            <td style="padding:0 24px 16px 24px;">
+                                <h3 style="font-size:14px;margin:0 0 8px 0;color:#111827;"><?php esc_html_e( 'Store', 'wcss' ); ?></h3>
+                                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;color:#374151;">
+                                    <tr>
+                                        <td width="25%" style="padding:2px 0;"><strong><?php esc_html_e( 'Name:', 'wcss' ); ?></strong></td>
+                                        <td style="padding:2px 0;"><?php echo esc_html( $store_name ?: '#' . $store_id ); ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td width="25%" style="padding:2px 0;"><strong><?php esc_html_e( 'Code:', 'wcss' ); ?></strong></td>
+                                        <td style="padding:2px 0;"><?php echo esc_html( $store_code ); ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td width="25%" style="padding:2px 0;"><strong><?php esc_html_e( 'City:', 'wcss' ); ?></strong></td>
+                                        <td style="padding:2px 0;"><?php echo esc_html( $store_city ); ?></td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                        <?php endif; ?>
 
-        <h3>Items</h3>
-        <table cellspacing="0" cellpadding="6" border="1" style="border-collapse:collapse;">
-            <thead>
-                <tr>
-                    <th align="left">Product</th>
-                    <th align="left">Qty</th>
-                    <th align="left">Total</th>
-                </tr>
-            </thead>
-            <tbody>
-            <?php foreach ( $order->get_items() as $item ) : ?>
-                <tr>
-                    <td><?php echo esc_html( $item->get_name() ); ?></td>
-                    <td><?php echo esc_html( $item->get_quantity() ); ?></td>
-                    <td><?php echo wp_kses_post( $order->get_formatted_line_subtotal( $item ) ); ?></td>
-                </tr>
-            <?php endforeach; ?>
-            </tbody>
+                        <tr>
+                            <td style="padding:0 24px 24px 24px;">
+                                <h3 style="font-size:14px;margin:0 0 8px 0;color:#111827;"><?php esc_html_e( 'Items', 'wcss' ); ?></h3>
+                                <table width="100%" cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse;font-size:13px;">
+                                    <thead>
+                                        <tr style="background:#f3f4f6;">
+                                            <th align="left" style="border:1px solid #e5e7eb;"><?php esc_html_e( 'Product', 'wcss' ); ?></th>
+                                            <th align="left" style="border:1px solid #e5e7eb;"><?php esc_html_e( 'Qty', 'wcss' ); ?></th>
+                                            <th align="left" style="border:1px solid #e5e7eb;"><?php esc_html_e( 'Total', 'wcss' ); ?></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ( $order->get_items() as $item ) : ?>
+                                        <tr>
+                                            <td style="border:1px solid #e5e7eb;"><?php echo esc_html( $item->get_name() ); ?></td>
+                                            <td style="border:1px solid #e5e7eb;"><?php echo esc_html( $item->get_quantity() ); ?></td>
+                                            <td style="border:1px solid #e5e7eb;"><?php echo wp_kses_post( $order->get_formatted_line_subtotal( $item ) ); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
         </table>
         <?php
         return ob_get_clean();
@@ -419,6 +464,7 @@ class WCSS_Notifications {
                     'Content-Type: text/html; charset=UTF-8',
                     // Adjust "from" as needed:
                     'From: Internal Supply <no-reply@' . wp_parse_url( home_url(), PHP_URL_HOST ) . '>',
+                    'X-WCSS-Context: wcss_vendor_notification',
                 ];
 
                 wp_mail( $to, $subject, $message, $headers );

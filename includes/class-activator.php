@@ -45,10 +45,11 @@ class WCSS_Activator {
 
     private static function maybe_create_tables() {
         global $wpdb;
-        $table = $wpdb->prefix . 'wcss_budget_ledger';
         $charset_collate = $wpdb->get_charset_collate();
 
-        $sql = "CREATE TABLE IF NOT EXISTS $table (
+        // Budget ledger table (existing)
+        $budget_table = $wpdb->prefix . 'wcss_budget_ledger';
+        $sql_budget   = "CREATE TABLE IF NOT EXISTS $budget_table (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             store_id BIGINT UNSIGNED NOT NULL,
             period_yyyymm CHAR(6) NOT NULL,
@@ -62,8 +63,26 @@ class WCSS_Activator {
             KEY order_idx (order_id)
         ) $charset_collate;";
 
+        // Email log table
+        $email_table = $wpdb->prefix . 'wcss_email_logs';
+        $sql_email   = "CREATE TABLE IF NOT EXISTS $email_table (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            mailed_to TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            message LONGTEXT NULL,
+            headers LONGTEXT NULL,
+            context VARCHAR(191) NULL,
+            sent_by BIGINT UNSIGNED NULL,
+            request_uri TEXT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY created_at (created_at),
+            KEY context (context)
+        ) $charset_collate;";
+
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-        dbDelta( $sql );
+        dbDelta( $sql_budget );
+        dbDelta( $sql_email );
     }
 
 
