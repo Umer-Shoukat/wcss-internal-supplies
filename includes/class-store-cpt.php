@@ -8,6 +8,8 @@ class WCSS_Store_CPT {
     const META_ADDR   = '_wcss_store_address';
     const META_BUDGET = '_wcss_monthly_budget';
     const META_QUOTA  = '_wcss_monthly_quota';
+    const META_MIN_ORDER_QUOTA = '_wcss_min_order_quota';
+    const META_MIN_ORDER_VALUE = '_wcss_min_order_value';
     const META_ACTIVE = '_wcss_is_active';
     const META_CITY     = '_wcss_store_city';
     const META_STATE    = '_wcss_store_state';
@@ -66,6 +68,8 @@ class WCSS_Store_CPT {
         $addr   = get_post_meta( $post->ID, self::META_ADDR, true );
         $budget = get_post_meta( $post->ID, self::META_BUDGET, true );
         $quota  = get_post_meta( $post->ID, self::META_QUOTA, true );
+        $min_order_quota = get_post_meta( $post->ID, self::META_MIN_ORDER_QUOTA, true );
+        $min_order_value = get_post_meta( $post->ID, self::META_MIN_ORDER_VALUE, true );
         $active = get_post_meta( $post->ID, self::META_ACTIVE, true );
         $city   = get_post_meta( $post->ID, self::META_CITY, true );
         $state  = get_post_meta( $post->ID, self::META_STATE, true );
@@ -73,6 +77,13 @@ class WCSS_Store_CPT {
         $country  = get_post_meta( $post->ID, self::META_COUNTRY, true );
         if ( $quota === '' ) {
             $quota = intval( wcss_get_option( 'default_monthly_quota', 1 ) );
+        }
+        // Default values for minimum order quota: 1 order/month, $50 minimum per order
+        if ( $min_order_quota === '' ) {
+            $min_order_quota = 1;
+        }
+        if ( $min_order_value === '' ) {
+            $min_order_value = 50;
         }
 
         ?>
@@ -92,6 +103,20 @@ class WCSS_Store_CPT {
             <tr>
                 <th><label for="wcss_monthly_quota"><?php esc_html_e( 'Monthly Order Quota', 'wcss' ); ?></label></th>
                 <td><input type="number" step="1" min="0" id="wcss_monthly_quota" name="wcss_monthly_quota" value="<?php echo esc_attr( $quota ); ?>" /></td>
+            </tr>
+            <tr>
+                <th><label for="wcss_min_order_quota"><?php esc_html_e( 'Minimum Order Quota (orders/month)', 'wcss' ); ?></label></th>
+                <td>
+                    <input type="number" step="1" min="0" id="wcss_min_order_quota" name="wcss_min_order_quota" value="<?php echo esc_attr( $min_order_quota ); ?>" />
+                    <p class="description"><?php esc_html_e( 'Minimum number of orders required per month for this store.', 'wcss' ); ?></p>
+                </td>
+            </tr>
+            <tr>
+                <th><label for="wcss_min_order_value"><?php esc_html_e( 'Minimum Order Value ($)', 'wcss' ); ?></label></th>
+                <td>
+                    <input type="number" step="0.01" min="0" id="wcss_min_order_value" name="wcss_min_order_value" value="<?php echo esc_attr( $min_order_value ); ?>" />
+                    <p class="description"><?php esc_html_e( 'Minimum dollar value required per order.', 'wcss' ); ?></p>
+                </td>
             </tr>
             <tr>
                 <th><label for="wcss_store_city"><?php esc_html_e( 'City', 'wcss' ); ?></label></th>
@@ -133,6 +158,8 @@ class WCSS_Store_CPT {
         $addr   = isset( $_POST['wcss_store_address'] ) ? wp_kses_post( $_POST['wcss_store_address'] ) : '';
         $budget = isset( $_POST['wcss_monthly_budget'] ) ? floatval( $_POST['wcss_monthly_budget'] ) : 0;
         $quota  = isset( $_POST['wcss_monthly_quota'] ) ? max( 0, intval( $_POST['wcss_monthly_quota'] ) ) : 0;
+        $min_order_quota = isset( $_POST['wcss_min_order_quota'] ) ? max( 0, intval( $_POST['wcss_min_order_quota'] ) ) : 1;
+        $min_order_value = isset( $_POST['wcss_min_order_value'] ) ? max( 0, floatval( $_POST['wcss_min_order_value'] ) ) : 50;
         $active = isset( $_POST['wcss_is_active'] ) ? ( $_POST['wcss_is_active'] === '1' ? '1' : '0' ) : '1';
         $city     = isset( $_POST['wcss_store_city'] ) ? sanitize_text_field( $_POST['wcss_store_city'] ) : '';
         $state    = isset( $_POST['wcss_store_state'] ) ? sanitize_text_field( $_POST['wcss_store_state'] ) : '';
@@ -147,6 +174,8 @@ class WCSS_Store_CPT {
         update_post_meta( $post_id, self::META_ADDR,   $addr );
         update_post_meta( $post_id, self::META_BUDGET, $budget );
         update_post_meta( $post_id, self::META_QUOTA,  $quota );
+        update_post_meta( $post_id, self::META_MIN_ORDER_QUOTA, $min_order_quota );
+        update_post_meta( $post_id, self::META_MIN_ORDER_VALUE, $min_order_value );
         update_post_meta( $post_id, self::META_ACTIVE, $active );
     }
 

@@ -106,10 +106,13 @@ class WCSS_Notifications {
 
     /**
      * Handle order status change: notify about approval / rejection etc.
+     * Mirrors the new-order behaviour: separate emails per audience with a shared design.
      */
     public function handle_status_change( $order_id, $old_status, $new_status, $order ) {
         $order = $order instanceof WC_Order ? $order : wc_get_order( $order_id );
-        if ( ! $order ) return;
+        if ( ! $order ) {
+            return;
+        }
 
         // Only notify for certain transitions if you want (e.g. approved / rejected)
         $interesting = [ 'approved', 'rejected', 'completed', 'cancelled' ];
@@ -117,48 +120,77 @@ class WCSS_Notifications {
             return;
         }
 
-        $recipients = [];
+        $order_number = $order->get_order_number();
+        $new_label    = wc_get_order_status_name( $new_status );
 
+        // 1) Store employee
         $store_employee_email = $this->get_store_employee_email_for_order( $order );
         if ( $store_employee_email ) {
-            $recipients[] = $store_employee_email;
+            $subject = sprintf(
+                '[Internal Supply] Order #%s status updated for your store: %s',
+                $order_number,
+                $new_label
+            );
+
+            $message = $this->build_status_change_email_body( $order, $old_status, $new_status, 'store_employee' );
+            $headers = [
+                'Content-Type: text/html; charset=UTF-8',
+                'X-WCSS-Context: wcss_status_store_employee',
+            ];
+
+            if ( function_exists( 'wc_mail' ) ) {
+                wc_mail( $store_employee_email, $subject, $message, $headers );
+            } else {
+                wp_mail( $store_employee_email, $subject, $message, $headers );
+            }
         }
 
-        $recipients = array_merge(
-            $recipients,
-            $this->get_supply_manager_emails()
-        );
+        // 2) Supply managers
+        $manager_emails = $this->get_supply_manager_emails();
+        if ( ! empty( $manager_emails ) ) {
+            $subject = sprintf(
+                '[Internal Supply] Order #%s status updated: %s',
+                $order_number,
+                $new_label
+            );
 
-        $recipients = array_merge(
-            $recipients,
-            $this->get_vendor_emails_for_order( $order )
-        );
+            $message = $this->build_status_change_email_body( $order, $old_status, $new_status, 'shop_manager' );
+            $headers = [
+                'Content-Type: text/html; charset=UTF-8',
+                'X-WCSS-Context: wcss_status_shop_manager',
+            ];
 
-        $recipients = array_unique( array_filter( $recipients ) );
-        if ( empty( $recipients ) ) {
-            return;
+            foreach ( array_unique( array_filter( $manager_emails ) ) as $email ) {
+                if ( function_exists( 'wc_mail' ) ) {
+                    wc_mail( $email, $subject, $message, $headers );
+                } else {
+                    wp_mail( $email, $subject, $message, $headers );
+                }
+            }
         }
 
-        $subject = sprintf(
-            '[Internal Supply] Order #%s status changed: %s',
-            $order->get_order_number(),
-            wc_get_order_status_name( $new_status )
-        );
+        // 3) Vendors (status update summary for all items, one per address)
+        $vendor_emails = $this->get_vendor_emails_for_order( $order );
+        if ( ! empty( $vendor_emails ) ) {
+            $subject = sprintf(
+                '[Internal Supply] Order #%s status updated: %s',
+                $order_number,
+                $new_label
+            );
 
-        $message = $this->build_status_change_email_body(
-            $order,
-            $old_status,
-            $new_status
-        );
-        $headers = [
-            'Content-Type: text/html; charset=UTF-8',
-            'X-WCSS-Context: wcss_order_status_change',
-        ];
+            $message = $this->build_status_change_email_body( $order, $old_status, $new_status, 'vendor' );
+            $headers = [
+                'Content-Type: text/html; charset=UTF-8',
+                'X-WCSS-Context: wcss_status_vendor',
+            ];
 
-        if ( function_exists( 'wc_mail' ) ) {
-            wc_mail( $recipients, $subject, $message, $headers );
-        } else {
-            wp_mail( $recipients, $subject, $message, $headers );
+            foreach ( array_unique( array_filter( $vendor_emails ) ) as $email ) {
+                if ( function_exists( 'wc_mail' ) ) {
+                    wc_mail( $email, $subject, $message, $headers );
+                } else {
+                    wp_mail( $email, $subject, $message, $headers );
+                }
+            }
         }
     }
 
@@ -371,20 +403,114 @@ class WCSS_Notifications {
 
     /**
      * Simple HTML email for STATUS CHANGE.
+     *
+     * @param WC_Order $order
+     * @param string   $old_status
+     * @param string   $new_status
+     * @param string   $audience store_employee|shop_manager|vendor|generic
      */
-    private function build_status_change_email_body( WC_Order $order, string $old_status, string $new_status ): string {
+    private function build_status_change_email_body( WC_Order $order, string $old_status, string $new_status, string $audience = 'generic' ): string {
         $old_label = wc_get_order_status_name( $old_status );
         $new_label = wc_get_order_status_name( $new_status );
 
+        $store_id   = (int) $order->get_meta( '_wcss_store_id' );
+        $store_name = $store_id ? get_the_title( $store_id ) : '';
+        $store_code = $store_id ? get_post_meta( $store_id, WCSS_Store_CPT::META_CODE, true ) : '';
+        $store_city = $store_id ? get_post_meta( $store_id, WCSS_Store_CPT::META_CITY, true ) : '';
+
+        $heading = sprintf(
+            'Order #%s status updated',
+            $order->get_order_number()
+        );
+
+        if ( 'store_employee' === $audience ) {
+            $intro = __( 'The status of an order for your store has been updated in the Internal Supply portal.', 'wcss' );
+        } elseif ( 'shop_manager' === $audience ) {
+            $intro = __( 'The status of an order has been updated in the Internal Supply portal.', 'wcss' );
+        } elseif ( 'vendor' === $audience ) {
+            $intro = __( 'The status of an order containing your items has been updated.', 'wcss' );
+        } else {
+            $intro = __( 'The status of an order has been updated.', 'wcss' );
+        }
+
         ob_start();
         ?>
-        <h2>Order #<?php echo esc_html( $order->get_order_number() ); ?> status updated</h2>
-        <p>
-            <strong>From:</strong> <?php echo esc_html( $old_label ); ?><br>
-            <strong>To:</strong> <?php echo esc_html( $new_label ); ?><br>
-            <strong>Total:</strong> <?php echo wp_kses_post( $order->get_formatted_order_total() ); ?><br>
-            <strong>Customer:</strong> <?php echo esc_html( $order->get_billing_email() ); ?>
-        </p>
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:#f5f5f7; padding:20px 0;">
+            <tr>
+                <td align="center">
+                    <table width="600" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #e2e2e7;">
+                        <tr>
+                            <td style="background:#111827;color:#ffffff;padding:16px 24px;font-size:18px;font-weight:600;">
+                                <?php echo esc_html( $heading ); ?>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding:16px 24px;font-size:14px;line-height:1.5;color:#111827;">
+                                <p style="margin:0 0 8px 0;"><?php echo esc_html( $intro ); ?></p>
+                                <p style="margin:0;">
+                                    <strong><?php esc_html_e( 'From:', 'wcss' ); ?></strong>
+                                    <?php echo esc_html( $old_label ); ?><br>
+                                    <strong><?php esc_html_e( 'To:', 'wcss' ); ?></strong>
+                                    <?php echo esc_html( $new_label ); ?><br>
+                                    <strong><?php esc_html_e( 'Total:', 'wcss' ); ?></strong>
+                                    <?php echo wp_kses_post( $order->get_formatted_order_total() ); ?><br>
+                                    <strong><?php esc_html_e( 'Customer:', 'wcss' ); ?></strong>
+                                    <?php echo esc_html( $order->get_billing_email() ); ?><br>
+                                    <strong><?php esc_html_e( 'Updated at:', 'wcss' ); ?></strong>
+                                    <?php echo esc_html( current_time( 'Y-m-d H:i' ) ); ?>
+                                </p>
+                            </td>
+                        </tr>
+
+                        <?php if ( $store_id ) : ?>
+                        <tr>
+                            <td style="padding:0 24px 16px 24px;">
+                                <h3 style="font-size:14px;margin:0 0 8px 0;color:#111827;"><?php esc_html_e( 'Store', 'wcss' ); ?></h3>
+                                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;color:#374151;">
+                                    <tr>
+                                        <td width="25%" style="padding:2px 0;"><strong><?php esc_html_e( 'Name:', 'wcss' ); ?></strong></td>
+                                        <td style="padding:2px 0;"><?php echo esc_html( $store_name ?: '#' . $store_id ); ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td width="25%" style="padding:2px 0;"><strong><?php esc_html_e( 'Code:', 'wcss' ); ?></strong></td>
+                                        <td style="padding:2px 0;"><?php echo esc_html( $store_code ); ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td width="25%" style="padding:2px 0;"><strong><?php esc_html_e( 'City:', 'wcss' ); ?></strong></td>
+                                        <td style="padding:2px 0;"><?php echo esc_html( $store_city ); ?></td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                        <?php endif; ?>
+
+                        <tr>
+                            <td style="padding:0 24px 24px 24px;">
+                                <h3 style="font-size:14px;margin:0 0 8px 0;color:#111827;"><?php esc_html_e( 'Items', 'wcss' ); ?></h3>
+                                <table width="100%" cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse;font-size:13px;">
+                                    <thead>
+                                        <tr style="background:#f3f4f6;">
+                                            <th align="left" style="border:1px solid #e5e7eb;"><?php esc_html_e( 'Product', 'wcss' ); ?></th>
+                                            <th align="left" style="border:1px solid #e5e7eb;"><?php esc_html_e( 'Qty', 'wcss' ); ?></th>
+                                            <th align="left" style="border:1px solid #e5e7eb;"><?php esc_html_e( 'Total', 'wcss' ); ?></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ( $order->get_items() as $item ) : ?>
+                                        <tr>
+                                            <td style="border:1px solid #e5e7eb;"><?php echo esc_html( $item->get_name() ); ?></td>
+                                            <td style="border:1px solid #e5e7eb;"><?php echo esc_html( $item->get_quantity() ); ?></td>
+                                            <td style="border:1px solid #e5e7eb;"><?php echo wp_kses_post( $order->get_formatted_line_subtotal( $item ) ); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
         <?php
         return ob_get_clean();
     }

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WCSS – Internal Supplies for WooCommerce
  * Description: Converts WooCommerce into an internal supplies portal with login-only ordering, monthly order quotas, budget enforcement, and approval workflow (scaffold).
- * Version:3.1.0
+ * Version:3.1.2
  * Author:  adex360 LTD
  * Text Domain: wcss
  * Domain Path: /languages

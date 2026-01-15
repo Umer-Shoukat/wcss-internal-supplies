@@ -60,6 +60,19 @@
       </div>
     </div>
 
+    <div class="grid-2">
+      <div>
+        <label>Minimum Order Quota (orders/month)</label>
+        <input id="s-min-order-quota" class="input" type="number" min="0" placeholder="1">
+        <small class="muted">Minimum number of orders required per month</small>
+      </div>
+      <div>
+        <label>Minimum Order Value ($)</label>
+        <input id="s-min-order-value" class="input" type="number" step="0.01" min="0" placeholder="50.00">
+        <small class="muted">Minimum dollar value required per order</small>
+      </div>
+    </div>
+
     <div>
       <label>Assign Store Employee *</label>
       <select id="s-user" class="input" required></select>

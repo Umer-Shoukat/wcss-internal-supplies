@@ -908,6 +908,8 @@
         open_hours: $("#s-hours").val(),
         quota: parseInt($("#s-quota").val(), 10) || 0,
         budget: parseFloat($("#s-budget").val()) || 0,
+        min_order_quota: parseInt($("#s-min-order-quota").val(), 10) || 1,
+        min_order_value: parseFloat($("#s-min-order-value").val()) || 50,
         user_id: parseInt($("#s-user").val(), 10) || 0,
       };
 
@@ -1029,6 +1031,8 @@
         $("#s-state").val(s.state || "");
         $("#s-quota").val(s.quota ?? "");
         $("#s-budget").val(s.budget ?? "");
+        $("#s-min-order-quota").val(s.min_order_quota ?? 1);
+        $("#s-min-order-value").val(s.min_order_value ?? 50);
 
         $("#s-address").val(s.address || "");
         $("#s-phone").val(s.phone || "");
@@ -1099,6 +1103,8 @@
           state: $("#s-state").val(),
           quota: $("#s-quota").val(),
           budget: $("#s-budget").val(),
+          min_order_quota: $("#s-min-order-quota").val() || 1,
+          min_order_value: $("#s-min-order-value").val() || 50,
           user_id: Number.isInteger(userId) && userId > 0 ? userId : 0,
           address: $("#s-address").val(),
           phone: $("#s-phone").val(),

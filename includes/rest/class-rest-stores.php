@@ -65,6 +65,16 @@ class WCSS_REST_Stores {
                     'validate_callback'=> function( $value ) { return $value === '' || is_numeric( $value ); },
                 ],
                 'budget'=> ['required'=>true, 'sanitize_callback'=>'wc_format_decimal'],
+                'min_order_quota' => [
+                    'required'=>false,
+                    'validate_callback'=> function( $value ) { return $value === '' || (is_numeric( $value ) && (int)$value >= 0); },
+                    'default' => 1,
+                ],
+                'min_order_value' => [
+                    'required'=>false,
+                    'validate_callback'=> function( $value ) { return $value === '' || (is_numeric( $value ) && (float)$value >= 0); },
+                    'default' => 50,
+                ],
                 'user_id' => [
                     'required' => true,
                     'validate_callback' => [ $this, 'validate_user_id_required' ],
@@ -296,6 +306,8 @@ class WCSS_REST_Stores {
         $META_STATE  = defined('WCSS_Store_CPT::META_STATE')  ? WCSS_Store_CPT::META_STATE  : '_store_state';
         $META_QUOTA  = defined('WCSS_Store_CPT::META_QUOTA')  ? WCSS_Store_CPT::META_QUOTA  : '_store_quota';
         $META_BUDGET = defined('WCSS_Store_CPT::META_BUDGET') ? WCSS_Store_CPT::META_BUDGET : '_store_budget';
+        $META_MIN_ORDER_QUOTA = defined('WCSS_Store_CPT::META_MIN_ORDER_QUOTA') ? WCSS_Store_CPT::META_MIN_ORDER_QUOTA : '_wcss_min_order_quota';
+        $META_MIN_ORDER_VALUE = defined('WCSS_Store_CPT::META_MIN_ORDER_VALUE') ? WCSS_Store_CPT::META_MIN_ORDER_VALUE : '_wcss_min_order_value';
         $META_ADDR   = defined('WCSS_Store_CPT::META_ADDR')   ? WCSS_Store_CPT::META_ADDR   : '_wcss_store_address';
         $META_PHONE  = defined('WCSS_Store_CPT::META_PHONE')  ? WCSS_Store_CPT::META_PHONE  : '_wcss_store_phone';
         $META_HOURS  = defined('WCSS_Store_CPT::META_HOURS')  ? WCSS_Store_CPT::META_HOURS  : '_wcss_open_hours';
@@ -306,6 +318,20 @@ class WCSS_REST_Stores {
         update_post_meta( $post_id, $META_STATE, sanitize_text_field($state) );
         if ($quota  !== null && $quota  !== '') update_post_meta( $post_id, $META_QUOTA,  (int)$quota );
         if ($budget !== null && $budget !== '') update_post_meta( $post_id, $META_BUDGET, wc_format_decimal($budget) );
+    
+        // Minimum order quota fields (defaults: 1 order/month, $50 minimum per order)
+        $min_order_quota = $req->get_param('min_order_quota');
+        $min_order_value = $req->get_param('min_order_value');
+        if ($min_order_quota !== null && $min_order_quota !== '') {
+            update_post_meta( $post_id, $META_MIN_ORDER_QUOTA, max( 0, (int)$min_order_quota ) );
+        } else {
+            update_post_meta( $post_id, $META_MIN_ORDER_QUOTA, 1 ); // default
+        }
+        if ($min_order_value !== null && $min_order_value !== '') {
+            update_post_meta( $post_id, $META_MIN_ORDER_VALUE, max( 0, (float)$min_order_value ) );
+        } else {
+            update_post_meta( $post_id, $META_MIN_ORDER_VALUE, 50 ); // default
+        }
     
         // NEW fields
         if ($address !== '') update_post_meta( $post_id, $META_ADDR,  wp_kses_post($address) );
@@ -475,6 +501,8 @@ class WCSS_REST_Stores {
         $META_STATE  = defined('WCSS_Store_CPT::META_STATE')  ? WCSS_Store_CPT::META_STATE  : '_store_state';
         $META_QUOTA  = defined('WCSS_Store_CPT::META_QUOTA')  ? WCSS_Store_CPT::META_QUOTA  : '_store_quota';
         $META_BUDGET = defined('WCSS_Store_CPT::META_BUDGET') ? WCSS_Store_CPT::META_BUDGET : '_store_budget';
+        $META_MIN_ORDER_QUOTA = defined('WCSS_Store_CPT::META_MIN_ORDER_QUOTA') ? WCSS_Store_CPT::META_MIN_ORDER_QUOTA : '_wcss_min_order_quota';
+        $META_MIN_ORDER_VALUE = defined('WCSS_Store_CPT::META_MIN_ORDER_VALUE') ? WCSS_Store_CPT::META_MIN_ORDER_VALUE : '_wcss_min_order_value';
         $META_ADDR   = defined('WCSS_Store_CPT::META_ADDR')   ? WCSS_Store_CPT::META_ADDR   : '_wcss_store_address';
         $META_PHONE  = defined('WCSS_Store_CPT::META_PHONE')  ? WCSS_Store_CPT::META_PHONE  : '_wcss_store_phone';
         $META_HOURS  = defined('WCSS_Store_CPT::META_HOURS')  ? WCSS_Store_CPT::META_HOURS  : '_wcss_open_hours';
@@ -484,6 +512,8 @@ class WCSS_REST_Stores {
         if ( array_key_exists('state',  $body) ) update_post_meta( $id, $META_STATE,  sanitize_text_field((string)$body['state']) );
         if ( array_key_exists('quota',  $body) ) update_post_meta( $id, $META_QUOTA,  (int)$body['quota'] );
         if ( array_key_exists('budget', $body) ) update_post_meta( $id, $META_BUDGET, wc_format_decimal($body['budget']) );
+        if ( array_key_exists('min_order_quota', $body) ) update_post_meta( $id, $META_MIN_ORDER_QUOTA, max( 0, (int)$body['min_order_quota'] ) );
+        if ( array_key_exists('min_order_value', $body) ) update_post_meta( $id, $META_MIN_ORDER_VALUE, max( 0, (float)$body['min_order_value'] ) );
     
         // NEW fields
         if ( array_key_exists('address',    $body) ) update_post_meta( $id, $META_ADDR,  wp_kses_post((string)$body['address']) );
@@ -596,6 +626,8 @@ class WCSS_REST_Stores {
         $META_STATE  = defined('WCSS_Store_CPT::META_STATE')  ? WCSS_Store_CPT::META_STATE  : '_store_state';
         $META_QUOTA  = defined('WCSS_Store_CPT::META_QUOTA')  ? WCSS_Store_CPT::META_QUOTA  : '_store_quota';
         $META_BUDGET = defined('WCSS_Store_CPT::META_BUDGET') ? WCSS_Store_CPT::META_BUDGET : '_store_budget';
+        $META_MIN_ORDER_QUOTA = defined('WCSS_Store_CPT::META_MIN_ORDER_QUOTA') ? WCSS_Store_CPT::META_MIN_ORDER_QUOTA : '_wcss_min_order_quota';
+        $META_MIN_ORDER_VALUE = defined('WCSS_Store_CPT::META_MIN_ORDER_VALUE') ? WCSS_Store_CPT::META_MIN_ORDER_VALUE : '_wcss_min_order_value';
         $META_ADDR   = defined('WCSS_Store_CPT::META_ADDR')   ? WCSS_Store_CPT::META_ADDR   : '_wcss_store_address';
         $META_PHONE  = defined('WCSS_Store_CPT::META_PHONE')  ? WCSS_Store_CPT::META_PHONE  : '_wcss_store_phone';
         $META_HOURS  = defined('WCSS_Store_CPT::META_HOURS')  ? WCSS_Store_CPT::META_HOURS  : '_wcss_open_hours';
@@ -605,6 +637,8 @@ class WCSS_REST_Stores {
         $state  = get_post_meta( $p->ID, $META_STATE,  true );
         $quota  = get_post_meta( $p->ID, $META_QUOTA,  true );
         $budget = get_post_meta( $p->ID, $META_BUDGET, true );
+        $min_order_quota = get_post_meta( $p->ID, $META_MIN_ORDER_QUOTA, true );
+        $min_order_value = get_post_meta( $p->ID, $META_MIN_ORDER_VALUE, true );
         $addr   = get_post_meta( $p->ID, $META_ADDR,   true );
         $phone  = get_post_meta( $p->ID, $META_PHONE,  true );
         $hours  = get_post_meta( $p->ID, $META_HOURS,  true );
@@ -627,6 +661,8 @@ class WCSS_REST_Stores {
             'state'     => (string) $state,
             'quota'     => (int) $quota,
             'budget'    => (float) $budget,
+            'min_order_quota' => (int) ($min_order_quota !== '' ? $min_order_quota : 1),
+            'min_order_value' => (float) ($min_order_value !== '' ? $min_order_value : 50),
             // NEW
             'address'   => (string) $addr,
             'phone'     => (string) $phone,
